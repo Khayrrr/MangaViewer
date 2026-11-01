@@ -1,5 +1,7 @@
 package com.khayrrr.mangaviewer.di
 
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
 import com.khayrrr.mangaviewer.data.local.MangaDatabase
 import com.khayrrr.mangaviewer.data.preferences.SettingsRepository
@@ -15,12 +17,16 @@ import org.koin.dsl.module
 
 val appModule = module {
     // Room Database
-    single {
+        single {
         Room.databaseBuilder(
             androidContext(),
             MangaDatabase::class.java,
             "manga_viewer.db"
-        ).fallbackToDestructiveMigration().build()
+        ).addMigrations(object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE album_metadata ADD COLUMN isRemoved INTEGER NOT NULL DEFAULT 0")
+            }
+        }).build()
     }
 
     single { get<MangaDatabase>().albumDao() }

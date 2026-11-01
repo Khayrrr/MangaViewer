@@ -13,7 +13,7 @@ import com.khayrrr.mangaviewer.data.local.entity.FavoriteImageEntity
         AlbumMetadataEntity::class,
         FavoriteImageEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

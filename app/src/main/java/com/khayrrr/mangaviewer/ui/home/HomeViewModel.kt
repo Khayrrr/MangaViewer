@@ -74,7 +74,7 @@ class HomeViewModel(
         val isScanning = extras.isScanning
 
         // Filter visible non-hidden albums
-        val visibleAlbums = albums.filter { !it.isHidden }
+        val visibleAlbums = albums.filter { !it.isHidden && !it.isRemoved }
 
         // Filter by search query (name AND tags)
         val filteredAlbums = if (query.isBlank()) {

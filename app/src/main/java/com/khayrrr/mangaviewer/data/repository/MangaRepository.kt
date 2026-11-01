@@ -88,6 +88,7 @@ class MangaRepositoryImpl(
                 lastModified = scanned.lastModified,
                 isPinned = meta?.isPinned ?: false,
                 isHidden = meta?.isHidden ?: false,
+                isRemoved = meta?.isRemoved ?: false,
                 tags = meta?.tags ?: emptyList(),
                 lastPage = meta?.lastPage ?: 0,
                 readPercent = meta?.readPercent ?: 0f,
@@ -249,7 +250,8 @@ class MangaRepositoryImpl(
         }
     }
 
-    override suspend fun removeAlbumFromLibrary(folderUri: String) {
-        setHidden(folderUri, true)
+       override suspend fun removeAlbumFromLibrary(folderUri: String) {
+        ensureMetadataExists(folderUri)
+        albumDao.setRemoved(folderUri, true)
     }
 }
