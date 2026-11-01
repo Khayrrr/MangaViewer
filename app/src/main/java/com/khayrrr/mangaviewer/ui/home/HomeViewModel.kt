@@ -35,6 +35,13 @@ data class HomeUiState(
 )
 
 class HomeViewModel(
+
+    private data class HomeExtras(
+    val query: String,
+    val searchActive: Boolean,
+    val selectedUris: Set<String>,
+    val isScanning: Boolean
+)
     private val mangaRepository: MangaRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -47,14 +54,24 @@ class HomeViewModel(
 
     private val _selectedAlbumUris = MutableStateFlow<Set<String>>(emptySet())
 
-    val uiState: StateFlow<HomeUiState> = combine(
-        mangaRepository.albumsFlow,
-        settingsRepository.settingsFlow,
+    private val extrasFlow = combine(
         _searchQuery,
         _isSearchActive,
         _selectedAlbumUris,
         mangaRepository.isScanning
-    ) { albums, settings, query, searchActive, selectedUris, isScanning ->
+    ) { query, searchActive, selectedUris, isScanning ->
+        HomeExtras(query, searchActive, selectedUris, isScanning)
+    }
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        mangaRepository.albumsFlow,
+        settingsRepository.settingsFlow,
+        extrasFlow
+    ) { albums, settings, extras ->
+        val query = extras.query
+        val searchActive = extras.searchActive
+        val selectedUris = extras.selectedUris
+        val isScanning = extras.isScanning
         // Filter visible non-hidden albums
         val visibleAlbums = albums.filter { !it.isHidden }
 
