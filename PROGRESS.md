@@ -20,21 +20,39 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
   - Built `SettingsScreen` matching Screen 20 mockup with full interactive settings controls and `SettingsViewModel`.
   - Built scaffolding for `HomeScreen`, `ReaderScreen`, `HiddenAlbumsScreen`, and `FavoritesScreen`.
 
-- **Phase 2 (Stage A: Data Layer)**
-  - Natural sort utility (`NaturalOrderComparator`) with unit tests for alphanumeric sorting (e.g. "page 2" before "page 10").
-  - Room database (`MangaDatabase`) with `AlbumMetadataEntity` (pinned, hidden, custom cover URI, tags, reading progress) and `FavoriteImageEntity`.
-  - Room DAOs (`AlbumDao`, `FavoriteDao`) and `Converters` for tag list serialization.
-  - Recursive SAF folder scanner (`SafScanner`) using `DocumentsContract` cursor queries over child documents to detect albums containing supported image formats (PNG, JPEG, WebP, GIF, AVIF, HEIC, HEIF).
-  - Domain models (`Album`, `ImageItem`) and `MangaRepository` (`MangaRepositoryImpl`) handling persisted SAF folder permissions (`takePersistableUriPermission`/`releasePersistableUriPermission`), background rescans, and combined Room metadata flows.
-  - `HomeViewModel` with sorting strategies, search filtering across album names and tags, and UI state management.
-  - Koin DI configured in `AppModule` providing Room database, DAOs, scanner, repository, and ViewModels.
+- **Phase 2: Folder picker, recursive album scanning, Room database, home screen (grid/list/mini-grid, sorting, search)**
+  - **Stage A (Data Layer)**:
+    - Natural sort utility (`NaturalOrderComparator`) with unit tests for alphanumeric sorting (e.g. "page 2" before "page 10").
+    - Room database (`MangaDatabase`) with `AlbumMetadataEntity` (pinned, hidden, custom cover URI, tags, reading progress) and `FavoriteImageEntity`.
+    - Room DAOs (`AlbumDao`, `FavoriteDao`) and `Converters` for tag list serialization.
+    - Recursive SAF folder scanner (`SafScanner`) using `DocumentsContract` cursor queries over child documents to detect albums containing supported image formats (PNG, JPEG, WebP, GIF, AVIF, HEIC, HEIF).
+    - Domain models (`Album`, `ImageItem`) and `MangaRepository` (`MangaRepositoryImpl`) handling persisted SAF folder permissions (`takePersistableUriPermission`/`releasePersistableUriPermission`), background rescans, and combined Room metadata flows.
+    - `HomeViewModel` with sorting strategies, search filtering across album names and tags, and UI state management.
+    - Koin DI configured in `AppModule` providing Room database, DAOs, scanner, repository, and ViewModels.
+  - **Stage B (Home Screen UI)**:
+    - Full Home screen UI matching design mockups (Screen 2: Grid view, Screen 3: List view).
+    - Grid view (2 columns, default), List view (horizontal rows with 64x64 thumbnails and inline progress bars), and Mini-grid view (3 columns).
+    - Pinned albums section pinned at top with pin badge icon on thumbnails.
+    - Three-dots overflow menu containing:
+      - View style selection (Grid 2 columns / List / Mini-grid 3 columns).
+      - Sort by (Alphabetical / Last modified / Oldest).
+      - Order (Ascending / Descending &mdash; enabled strictly only when Alphabetical is active, disabled otherwise).
+      - Favorites navigation.
+      - Hidden albums navigation.
+      - Refresh action.
+      - Settings navigation.
+    - Expandable top search bar with real-time filtering across both album names and tags.
+    - Pull-to-refresh integration (`PullToRefreshBox`).
+    - Coil 3 image loading with asynchronous thumbnail caching and fallback gradient placeholders.
+    - Empty states for initial setup (folder picker prompt) and zero search results.
+    - Root folder picker integration in both Home screen and Settings screen.
 
 ## Current Phase
-- **Phase 2 (Stage B: Home Screen UI)**
-  - Status: In progress
+- **Phase 3: Long-press selection mode and all album actions (remove, pin, rename, share, cover, tags, hide, details), Hidden and Favorites screens**
+  - Status: Not started (awaiting instruction)
 
 ## Known Issues
 - None.
 
 ## Exact Next Step
-- Complete Stage B: Build the full Home screen matching the design mockups with 2-column grid (default), list view, and 3-column mini-grid, three-dots menu (view style, sort by, order enabled for alphabetical, Favorites, Hidden albums, Refresh, Settings), pinned albums section, expandable search, pull-to-refresh, thumbnail caching with Coil 3, and DataStore integration.
+- Phase 3: Implement contextual action bar overlay on long-press album selection (single selection actions: Remove, Pin/Unpin, Rename via SAF, Share, Change cover, Edit tags, Hide album, Details; multiple selection actions: Remove and Share), ZIP export sharing, and full Hidden Albums and Favorites screens.
