@@ -95,7 +95,7 @@ fun AlbumGridCard(
                     // Placeholder when no image is loaded
                     Column(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterVertically,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Icon(

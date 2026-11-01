@@ -46,6 +46,7 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Coil 3 image loading with asynchronous thumbnail caching and fallback gradient placeholders.
     - Empty states for initial setup (folder picker prompt) and zero search results.
     - Root folder picker integration in both Home screen and Settings screen.
+    - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
 - **Phase 3: Long-press selection mode and all album actions (remove, pin, rename, share, cover, tags, hide, details), Hidden and Favorites screens**
