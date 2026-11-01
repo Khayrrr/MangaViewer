@@ -20,12 +20,21 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
   - Built `SettingsScreen` matching Screen 20 mockup with full interactive settings controls and `SettingsViewModel`.
   - Built scaffolding for `HomeScreen`, `ReaderScreen`, `HiddenAlbumsScreen`, and `FavoritesScreen`.
 
+- **Phase 2 (Stage A: Data Layer)**
+  - Natural sort utility (`NaturalOrderComparator`) with unit tests for alphanumeric sorting (e.g. "page 2" before "page 10").
+  - Room database (`MangaDatabase`) with `AlbumMetadataEntity` (pinned, hidden, custom cover URI, tags, reading progress) and `FavoriteImageEntity`.
+  - Room DAOs (`AlbumDao`, `FavoriteDao`) and `Converters` for tag list serialization.
+  - Recursive SAF folder scanner (`SafScanner`) using `DocumentsContract` cursor queries over child documents to detect albums containing supported image formats (PNG, JPEG, WebP, GIF, AVIF, HEIC, HEIF).
+  - Domain models (`Album`, `ImageItem`) and `MangaRepository` (`MangaRepositoryImpl`) handling persisted SAF folder permissions (`takePersistableUriPermission`/`releasePersistableUriPermission`), background rescans, and combined Room metadata flows.
+  - `HomeViewModel` with sorting strategies, search filtering across album names and tags, and UI state management.
+  - Koin DI configured in `AppModule` providing Room database, DAOs, scanner, repository, and ViewModels.
+
 ## Current Phase
-- **Phase 2: Folder picker, recursive album scanning, Room database, home screen (grid/list/mini-grid, sorting, search)**
-  - Status: Not started (awaiting instruction)
+- **Phase 2 (Stage B: Home Screen UI)**
+  - Status: In progress
 
 ## Known Issues
 - None.
 
 ## Exact Next Step
-- Phase 2: Implement SAF folder picker (`OpenDocumentTree`), recursive background scanner with `DocumentsContract`, Room database entities/DAOs for album metadata & favorites, and full Home screen with 2-column grid, list view, 3-column mini-grid, search filtering, and sorting.
+- Complete Stage B: Build the full Home screen matching the design mockups with 2-column grid (default), list view, and 3-column mini-grid, three-dots menu (view style, sort by, order enabled for alphabetical, Favorites, Hidden albums, Refresh, Settings), pinned albums section, expandable search, pull-to-refresh, thumbnail caching with Coil 3, and DataStore integration.
