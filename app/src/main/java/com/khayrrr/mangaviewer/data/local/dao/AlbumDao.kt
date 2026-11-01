@@ -26,6 +26,9 @@ interface AlbumDao {
     @Query("UPDATE album_metadata SET isHidden = :isHidden WHERE folderUri = :folderUri")
     suspend fun setHidden(folderUri: String, isHidden: Boolean)
 
+    @Query("UPDATE album_metadata SET isRemoved = :isRemoved WHERE folderUri = :folderUri")
+    suspend fun setRemoved(folderUri: String, isRemoved: Boolean)
+
     @Query("UPDATE album_metadata SET customCoverUri = :coverUri WHERE folderUri = :folderUri")
     suspend fun setCustomCover(folderUri: String, coverUri: String?)
 
