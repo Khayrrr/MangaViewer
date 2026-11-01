@@ -34,14 +34,14 @@ data class HomeUiState(
     val isSelectionMode: Boolean = false
 )
 
-class HomeViewModel(
-
-    private data class HomeExtras(
+private data class HomeExtras(
     val query: String,
     val searchActive: Boolean,
     val selectedUris: Set<String>,
     val isScanning: Boolean
 )
+
+class HomeViewModel(
     private val mangaRepository: MangaRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -72,6 +72,7 @@ class HomeViewModel(
         val searchActive = extras.searchActive
         val selectedUris = extras.selectedUris
         val isScanning = extras.isScanning
+
         // Filter visible non-hidden albums
         val visibleAlbums = albums.filter { !it.isHidden }
 
