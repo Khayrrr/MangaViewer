@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -1401,5 +1403,3 @@ private fun EmptyAlbumsPrompt(
         }
     }
 }
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.statusBarsPadding
