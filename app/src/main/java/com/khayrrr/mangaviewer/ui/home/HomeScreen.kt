@@ -153,6 +153,14 @@ fun HomeScreen(
         viewModel.getSelectedAlbums()
     }
     val singleSelectedAlbum = selectedAlbums.firstOrNull()
+        // Back closes search first-level UI; selection takes priority (registered last)
+    BackHandler(enabled = uiState.isSearchActive) {
+        viewModel.setSearchActive(false)
+        focusManager.clearFocus()
+    }
+    BackHandler(enabled = uiState.isSelectionMode) {
+        viewModel.clearSelection()
+    }
 
     Scaffold(
         topBar = {
@@ -166,6 +174,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
+                                .statusBarsPadding()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -178,9 +187,10 @@ fun HomeScreen(
                             }
 
                             Text(
-                                text = "${uiState.selectedAlbumUris.size} selected",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = "${uiState.selectedAlbumUris.size}",
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -301,6 +311,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
+                                .statusBarsPadding()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -1390,3 +1401,5 @@ private fun EmptyAlbumsPrompt(
         }
     }
 }
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.statusBarsPadding
