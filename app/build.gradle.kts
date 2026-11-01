@@ -36,8 +36,9 @@ android {
                 "proguard-rules.pro"
             )
         }
-        debug {
+                debug {
             isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
         }
     }
     compileOptions {
