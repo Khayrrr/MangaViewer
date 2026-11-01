@@ -45,6 +45,9 @@ interface MangaRepository {
     fun isFavoriteFlow(imageUri: String): Flow<Boolean>
     suspend fun isFavorite(imageUri: String): Boolean
     suspend fun getImagesForAlbum(folderUri: String): List<ImageItem>
+    suspend fun renameAlbum(folderUri: String, newName: String): Boolean
+    suspend fun deleteAlbumFromDevice(folderUri: String): Boolean
+    suspend fun removeAlbumFromLibrary(folderUri: String)
 }
 
 class MangaRepositoryImpl(
@@ -209,5 +212,44 @@ class MangaRepositoryImpl(
         val uri = Uri.parse(folderUri)
         val docId = DocumentsContract.getDocumentId(uri)
         scanner.getImagesInAlbum(uri, docId)
+    }
+
+    override suspend fun renameAlbum(folderUri: String, newName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val uri = Uri.parse(folderUri)
+            val resultUri = DocumentsContract.renameDocument(context.contentResolver, uri, newName)
+            if (resultUri != null) {
+                val meta = albumDao.getMetadata(folderUri)
+                if (meta != null && resultUri.toString() != folderUri) {
+                    albumDao.deleteMetadata(folderUri)
+                    albumDao.upsertMetadata(meta.copy(folderUri = resultUri.toString()))
+                }
+                rescan()
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename album $folderUri to $newName", e)
+            false
+        }
+    }
+
+    override suspend fun deleteAlbumFromDevice(folderUri: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val uri = Uri.parse(folderUri)
+            val deleted = DocumentsContract.deleteDocument(context.contentResolver, uri)
+            albumDao.deleteMetadata(folderUri)
+            favoriteDao.deleteFavoritesForAlbum(folderUri)
+            rescan()
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete album $folderUri from device", e)
+            false
+        }
+    }
+
+    override suspend fun removeAlbumFromLibrary(folderUri: String) {
+        setHidden(folderUri, true)
     }
 }
