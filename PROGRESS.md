@@ -64,6 +64,7 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
 - Albums removed from the library cannot be restored yet (planned: "Restore removed albums" in Settings).
 - Hiding an album only hides it inside this app; gallery apps still show the files.
 - Favorites cannot be added until the reader exists (Phase 4).
+- Renaming the library root folder is blocked inside the app, because Android revokes the app's access to it; rename it in a file manager and add it again.
 
 ## Exact Next Step
 - Build the Favorites screen, update this file, merge `phase3-wip` into `main`, then start Phase 4 (the reader).

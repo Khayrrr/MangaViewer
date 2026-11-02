@@ -2,6 +2,7 @@ package com.khayrrr.mangaviewer.ui.home
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
@@ -150,6 +151,7 @@ fun HomeScreen(
     var showDetailsDialog by remember { mutableStateOf(false) }
     var showEditTagsDialog by remember { mutableStateOf(false) }
     var showChangeCoverDialog by remember { mutableStateOf(false) }
+    var showRootRenameInfo by remember { mutableStateOf(false) }
 
     val selectedAlbums = remember(uiState.selectedAlbumUris, uiState.albums) {
         viewModel.getSelectedAlbums()
@@ -217,8 +219,12 @@ fun HomeScreen(
 
                                 // Rename
                                 IconButton(onClick = {
-                                    renameInput = singleSelectedAlbum.name
-                                    showRenameDialog = true
+                                    if (isLibraryRoot(singleSelectedAlbum.uri)) {
+                                        showRootRenameInfo = true
+                                    } else {
+                                        renameInput = singleSelectedAlbum.name
+                                        showRenameDialog = true
+                                    }
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.DriveFileRenameOutline,
@@ -684,6 +690,20 @@ fun HomeScreen(
     }
 
     // 3. Share Dialog (Share as Images vs Share as ZIP)
+        if (showRootRenameInfo) {
+        AlertDialog(
+            onDismissRequest = { showRootRenameInfo = false },
+            title = { Text("Can't rename library folder") },
+            text = {
+                Text("This is the folder you picked as your library. Renaming it would make Android remove this app's access to it. Rename it in your file manager instead, then add it again in Settings.")
+            },
+            confirmButton = {
+                TextButton(onClick = { showRootRenameInfo = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
     if (showShareDialog && selectedAlbums.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showShareDialog = false },
@@ -1401,5 +1421,14 @@ private fun EmptyAlbumsPrompt(
                 }
             }
         }
+    }
+}
+
+private fun isLibraryRoot(folderUri: String): Boolean {
+    return try {
+        val uri = Uri.parse(folderUri)
+        DocumentsContract.getDocumentId(uri) == DocumentsContract.getTreeDocumentId(uri)
+    } catch (e: Exception) {
+        false
     }
 }

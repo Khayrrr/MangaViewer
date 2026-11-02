@@ -9,6 +9,7 @@ import com.khayrrr.mangaviewer.data.preferences.SettingsRepositoryImpl
 import com.khayrrr.mangaviewer.data.repository.MangaRepository
 import com.khayrrr.mangaviewer.data.repository.MangaRepositoryImpl
 import com.khayrrr.mangaviewer.data.scanner.SafScanner
+import com.khayrrr.mangaviewer.ui.favorites.FavoritesViewModel
 import com.khayrrr.mangaviewer.ui.hidden.HiddenAlbumsViewModel
 import com.khayrrr.mangaviewer.ui.home.HomeViewModel
 import com.khayrrr.mangaviewer.ui.settings.SettingsViewModel
@@ -54,4 +55,5 @@ val appModule = module {
     viewModel { SettingsViewModel(settingsRepository = get()) }
     viewModel { HomeViewModel(mangaRepository = get(), settingsRepository = get()) }
         viewModel { HiddenAlbumsViewModel(mangaRepository = get(), settingsRepository = get()) }
+            viewModel { FavoritesViewModel(mangaRepository = get()) }
 }

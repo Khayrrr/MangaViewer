@@ -100,7 +100,10 @@ fun MangaNavGraph(
 
         composable(Screen.Favorites.route) {
             FavoritesScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onOpenFavorite = { albumUri, page ->
+                    navController.navigate(Screen.Reader.createRoute(albumUri, page))
+                }
             )
         }
     }
