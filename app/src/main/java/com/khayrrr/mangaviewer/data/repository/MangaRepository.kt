@@ -218,6 +218,10 @@ class MangaRepositoryImpl(
     override suspend fun renameAlbum(folderUri: String, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val oldUri = Uri.parse(folderUri)
+                        if (DocumentsContract.getDocumentId(oldUri) == DocumentsContract.getTreeDocumentId(oldUri)) {
+                // Renaming the picked library folder makes Android revoke the app's access to it
+                return@withContext false
+            }
             val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, newName)
                 ?: return@withContext false
 
