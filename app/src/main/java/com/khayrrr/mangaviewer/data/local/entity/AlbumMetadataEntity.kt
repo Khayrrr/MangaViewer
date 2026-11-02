@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -13,5 +14,7 @@ data class AlbumMetadataEntity(
     val tags: List<String> = emptyList(),
     val lastPage: Int = 0,
     val readPercent: Float = 0f,
-    val lastReadTimestamp: Long = 0L
+    val lastReadTimestamp: Long = 0L,
+    @ColumnInfo(defaultValue = "0")
+    val isRemoved: Boolean = false
 )

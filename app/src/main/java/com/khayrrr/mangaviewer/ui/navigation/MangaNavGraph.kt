@@ -91,7 +91,10 @@ fun MangaNavGraph(
 
         composable(Screen.HiddenAlbums.route) {
             HiddenAlbumsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onOpenReader = { albumUri ->
+                    navController.navigate(Screen.Reader.createRoute(albumUri))
+                }
             )
         }
 

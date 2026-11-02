@@ -1,5 +1,7 @@
 package com.khayrrr.mangaviewer.di
 
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
 import com.khayrrr.mangaviewer.data.local.MangaDatabase
 import com.khayrrr.mangaviewer.data.preferences.SettingsRepository
@@ -7,6 +9,7 @@ import com.khayrrr.mangaviewer.data.preferences.SettingsRepositoryImpl
 import com.khayrrr.mangaviewer.data.repository.MangaRepository
 import com.khayrrr.mangaviewer.data.repository.MangaRepositoryImpl
 import com.khayrrr.mangaviewer.data.scanner.SafScanner
+import com.khayrrr.mangaviewer.ui.hidden.HiddenAlbumsViewModel
 import com.khayrrr.mangaviewer.ui.home.HomeViewModel
 import com.khayrrr.mangaviewer.ui.settings.SettingsViewModel
 import org.koin.android.ext.koin.androidContext
@@ -15,12 +18,16 @@ import org.koin.dsl.module
 
 val appModule = module {
     // Room Database
-    single {
+        single {
         Room.databaseBuilder(
             androidContext(),
             MangaDatabase::class.java,
             "manga_viewer.db"
-        ).fallbackToDestructiveMigration().build()
+        ).addMigrations(object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE album_metadata ADD COLUMN isRemoved INTEGER NOT NULL DEFAULT 0")
+            }
+        }).build()
     }
 
     single { get<MangaDatabase>().albumDao() }
@@ -46,4 +53,5 @@ val appModule = module {
     // ViewModels
     viewModel { SettingsViewModel(settingsRepository = get()) }
     viewModel { HomeViewModel(mangaRepository = get(), settingsRepository = get()) }
+        viewModel { HiddenAlbumsViewModel(mangaRepository = get(), settingsRepository = get()) }
 }

@@ -4,9 +4,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.khayrrr.mangaviewer.data.model.Album
+import com.khayrrr.mangaviewer.data.model.ImageItem
 import com.khayrrr.mangaviewer.data.preferences.AlbumSortBy
 import com.khayrrr.mangaviewer.data.preferences.AlbumViewStyle
-import com.khayrrr.mangaviewer.data.preferences.AppSettings
 import com.khayrrr.mangaviewer.data.preferences.SettingsRepository
 import com.khayrrr.mangaviewer.data.preferences.SortOrder
 import com.khayrrr.mangaviewer.data.repository.MangaRepository
@@ -29,7 +29,16 @@ data class HomeUiState(
     val searchQuery: String = "",
     val isSearchActive: Boolean = false,
     val isScanning: Boolean = false,
-    val hasRootFolders: Boolean = false
+    val hasRootFolders: Boolean = false,
+    val selectedAlbumUris: Set<String> = emptySet(),
+    val isSelectionMode: Boolean = false
+)
+
+private data class HomeExtras(
+    val query: String,
+    val searchActive: Boolean,
+    val selectedUris: Set<String>,
+    val isScanning: Boolean
 )
 
 class HomeViewModel(
@@ -43,15 +52,29 @@ class HomeViewModel(
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
 
+    private val _selectedAlbumUris = MutableStateFlow<Set<String>>(emptySet())
+
+    private val extrasFlow = combine(
+        _searchQuery,
+        _isSearchActive,
+        _selectedAlbumUris,
+        mangaRepository.isScanning
+    ) { query, searchActive, selectedUris, isScanning ->
+        HomeExtras(query, searchActive, selectedUris, isScanning)
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         mangaRepository.albumsFlow,
         settingsRepository.settingsFlow,
-        _searchQuery,
-        _isSearchActive,
-        mangaRepository.isScanning
-    ) { albums, settings, query, searchActive, isScanning ->
+        extrasFlow
+    ) { albums, settings, extras ->
+        val query = extras.query
+        val searchActive = extras.searchActive
+        val selectedUris = extras.selectedUris
+        val isScanning = extras.isScanning
+
         // Filter visible non-hidden albums
-        val visibleAlbums = albums.filter { !it.isHidden }
+        val visibleAlbums = albums.filter { !it.isHidden && !it.isRemoved }
 
         // Filter by search query (name AND tags)
         val filteredAlbums = if (query.isBlank()) {
@@ -80,7 +103,9 @@ class HomeViewModel(
             searchQuery = query,
             isSearchActive = searchActive,
             isScanning = isScanning,
-            hasRootFolders = settings.rootFolderUris.isNotEmpty()
+            hasRootFolders = settings.rootFolderUris.isNotEmpty(),
+            selectedAlbumUris = selectedUris,
+            isSelectionMode = selectedUris.isNotEmpty()
         )
     }.stateIn(
         scope = viewModelScope,
@@ -101,11 +126,9 @@ class HomeViewModel(
                     if (sortOrder == SortOrder.ASCENDING) comp else -comp
                 }
                 AlbumSortBy.LAST_MODIFIED -> {
-                    // Newest first by default
                     b.lastModified.compareTo(a.lastModified)
                 }
                 AlbumSortBy.OLDEST -> {
-                    // Oldest first
                     a.lastModified.compareTo(b.lastModified)
                 }
             }
@@ -153,15 +176,82 @@ class HomeViewModel(
         }
     }
 
-    fun togglePin(album: Album) {
+    // Selection Mode
+    fun toggleAlbumSelection(uri: String) {
+        val current = _selectedAlbumUris.value.toMutableSet()
+        if (current.contains(uri)) {
+            current.remove(uri)
+        } else {
+            current.add(uri)
+        }
+        _selectedAlbumUris.value = current
+    }
+
+    fun enterSelectionMode(uri: String) {
+        _selectedAlbumUris.value = setOf(uri)
+    }
+
+    fun clearSelection() {
+        _selectedAlbumUris.value = emptySet()
+    }
+
+    fun getSelectedAlbums(): List<Album> {
+        val selectedSet = _selectedAlbumUris.value
+        return uiState.value.albums.filter { selectedSet.contains(it.uri) }
+    }
+
+    fun removeSelectedAlbums(fromDevice: Boolean) {
+        val selected = getSelectedAlbums()
         viewModelScope.launch {
-            mangaRepository.setPinned(album.uri, !album.isPinned)
+            selected.forEach { album ->
+                if (fromDevice) {
+                    mangaRepository.deleteAlbumFromDevice(album.uri)
+                } else {
+                    mangaRepository.removeAlbumFromLibrary(album.uri)
+                }
+            }
+            clearSelection()
         }
     }
 
-    fun toggleHide(album: Album) {
+    fun togglePinSelectedAlbum() {
+        val album = getSelectedAlbums().firstOrNull() ?: return
         viewModelScope.launch {
-            mangaRepository.setHidden(album.uri, !album.isHidden)
+            mangaRepository.setPinned(album.uri, !album.isPinned)
+            clearSelection()
         }
+    }
+
+    fun renameSelectedAlbum(newName: String) {
+        val album = getSelectedAlbums().firstOrNull() ?: return
+        viewModelScope.launch {
+            mangaRepository.renameAlbum(album.uri, newName)
+            clearSelection()
+        }
+    }
+
+    fun hideSelectedAlbum() {
+        val album = getSelectedAlbums().firstOrNull() ?: return
+        viewModelScope.launch {
+            mangaRepository.setHidden(album.uri, true)
+            clearSelection()
+        }
+    }
+
+    fun setCustomCover(albumUri: String, coverUri: String) {
+        viewModelScope.launch {
+            mangaRepository.setCustomCover(albumUri, coverUri)
+            clearSelection()
+        }
+    }
+
+    fun setAlbumTags(albumUri: String, tags: List<String>) {
+        viewModelScope.launch {
+            mangaRepository.setTags(albumUri, tags)
+        }
+    }
+
+    suspend fun getImagesForAlbum(albumUri: String): List<ImageItem> {
+        return mangaRepository.getImagesForAlbum(albumUri)
     }
 }

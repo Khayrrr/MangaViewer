@@ -49,11 +49,21 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-- **Phase 3: Long-press selection mode and all album actions (remove, pin, rename, share, cover, tags, hide, details), Hidden and Favorites screens**
-  - Status: Not started (awaiting instruction)
+- **Phase 3: Long-press selection mode, album actions, Hidden and Favorites screens** (in progress, branch `phase3-wip`)
+  - Done:
+    - Selection mode with contextual action bar (status bar insets, back button closes selection first).
+    - Single-album actions: Remove (from library, via its own `isRemoved` flag, or delete from device), Pin/Unpin, Rename (migrates cover, favorites and nested album URIs), Share (images or ZIP), Change cover, Edit tags, Hide, Details.
+    - Multi-select actions: Remove and Share.
+    - Hidden Albums screen with Unhide and a once-per-app-session biometric lock (fingerprint or device PIN).
+    - Room database v2 with a 1 to 2 migration (no destructive fallback).
+    - CI builds sign debug APKs with a fixed `app/debug.keystore`; debug builds use the `.debug` package suffix.
+  - Remaining: Favorites screen (needs the mockup), then merge `phase3-wip` into `main`.
 
 ## Known Issues
-- None.
+- Share as Images on a very large album can exceed Android's intent size limit; use Share as ZIP.
+- Albums removed from the library cannot be restored yet (planned: "Restore removed albums" in Settings).
+- Hiding an album only hides it inside this app; gallery apps still show the files.
+- Favorites cannot be added until the reader exists (Phase 4).
 
 ## Exact Next Step
-- Phase 3: Implement contextual action bar overlay on long-press album selection (single selection actions: Remove, Pin/Unpin, Rename via SAF, Share, Change cover, Edit tags, Hide album, Details; multiple selection actions: Remove and Share), ZIP export sharing, and full Hidden Albums and Favorites screens.
+- Build the Favorites screen, update this file, merge `phase3-wip` into `main`, then start Phase 4 (the reader).

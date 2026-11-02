@@ -18,6 +18,7 @@ data class Album(
     val lastModified: Long,
     val isPinned: Boolean = false,
     val isHidden: Boolean = false,
+    val isRemoved: Boolean = false,
     val tags: List<String> = emptyList(),
     val lastPage: Int = 0,
     val readPercent: Float = 0f,

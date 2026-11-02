@@ -13,6 +13,9 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorite_images ORDER BY addedTimestamp DESC")
     fun observeAllFavorites(): Flow<List<FavoriteImageEntity>>
 
+    @Query("SELECT * FROM favorite_images")
+    suspend fun getAllFavorites(): List<FavoriteImageEntity>
+
     @Query("SELECT * FROM favorite_images WHERE albumUri = :albumUri")
     fun observeFavoritesForAlbum(albumUri: String): Flow<List<FavoriteImageEntity>>
 
