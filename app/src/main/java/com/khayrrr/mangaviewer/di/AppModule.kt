@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.di
 
+import com.khayrrr.mangaviewer.ui.reader.ReaderViewModel
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
@@ -54,6 +55,7 @@ val appModule = module {
     // ViewModels
     viewModel { SettingsViewModel(settingsRepository = get()) }
     viewModel { HomeViewModel(mangaRepository = get(), settingsRepository = get()) }
-        viewModel { HiddenAlbumsViewModel(mangaRepository = get(), settingsRepository = get()) }
-            viewModel { FavoritesViewModel(mangaRepository = get()) }
+    viewModel { HiddenAlbumsViewModel(mangaRepository = get(), settingsRepository = get()) }
+    viewModel { FavoritesViewModel(mangaRepository = get()) }
+    viewModel { ReaderViewModel(context = androidContext(), mangaRepository = get(), settingsRepository = get()) }
 }

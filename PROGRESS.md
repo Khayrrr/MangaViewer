@@ -49,22 +49,20 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-- **Phase 3: Long-press selection mode, album actions, Hidden and Favorites screens** (in progress, branch `phase3-wip`)
-  - Done:
-    - Selection mode with contextual action bar (status bar insets, back button closes selection first).
-    - Single-album actions: Remove (from library, via its own `isRemoved` flag, or delete from device), Pin/Unpin, Rename (migrates cover, favorites and nested album URIs), Share (images or ZIP), Change cover, Edit tags, Hide, Details.
-    - Multi-select actions: Remove and Share.
-    - Hidden Albums screen with Unhide and a once-per-app-session biometric lock (fingerprint or device PIN).
-    - Room database v2 with a 1 to 2 migration (no destructive fallback).
-    - CI builds sign debug APKs with a fixed `app/debug.keystore`; debug builds use the `.debug` package suffix.
-  - Remaining: Favorites screen (needs the mockup), then merge `phase3-wip` into `main`.
+- **Phase 3: Selection mode, album actions, Hidden and Favorites screens** (done, merged to `main`)
+  - Selection mode, Remove (library or device), Pin, Rename (library root renaming blocked), Share (images or ZIP), Change cover, Edit tags, Hide, Details.
+  - Hidden Albums screen with once-per-session biometric lock, Favorites screen.
+  - Room database v2 with migration, fixed debug keystore, `.debug` package suffix for debug builds.
+- **Phase 4: Reader** (in progress, branch `phase4-reader`)
+  - Stage A (done): vertical continuous reader, no gaps, fit to width, pinch and double-tap zoom, page indicator pill, thin progress bar with the toolbar, resume last page, favorite star, keep-screen-on and hide-system-bars toggles in the reader menu, rolling-window page measuring, progress saved as you read.
+  - Stage B (next): toolbar actions (set wallpaper, rename, delete, share a page) and the animate GIF/AVIF setting.
 
 ## Known Issues
 - Share as Images on a very large album can exceed Android's intent size limit; use Share as ZIP.
 - Albums removed from the library cannot be restored yet (planned: "Restore removed albums" in Settings).
 - Hiding an album only hides it inside this app; gallery apps still show the files.
-- Favorites cannot be added until the reader exists (Phase 4).
 - Renaming the library root folder is blocked inside the app, because Android revokes the app's access to it; rename it in a file manager and add it again.
+- Reader zoom is centered horizontally (not on the pinch point) and has no flick momentum while zoomed.
 
 ## Exact Next Step
-- Build the Favorites screen, update this file, merge `phase3-wip` into `main`, then start Phase 4 (the reader).
+- Reader Stage B: set wallpaper, rename image, delete image, share image, and the animate GIF/AVIF setting.

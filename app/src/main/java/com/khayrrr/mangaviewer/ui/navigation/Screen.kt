@@ -5,7 +5,8 @@ import android.net.Uri
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Reader : Screen("reader/{albumUri}?initialPage={initialPage}") {
-        fun createRoute(albumUri: String, initialPage: Int = 0): String {
+        /** initialPage = -1 means "resume where I left off". */
+        fun createRoute(albumUri: String, initialPage: Int = -1): String {
             val encodedUri = Uri.encode(albumUri)
             return "reader/$encodedUri?initialPage=$initialPage"
         }
