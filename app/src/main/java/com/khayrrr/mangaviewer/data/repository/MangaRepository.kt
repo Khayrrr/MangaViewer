@@ -217,25 +217,61 @@ class MangaRepositoryImpl(
 
     override suspend fun renameAlbum(folderUri: String, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val uri = Uri.parse(folderUri)
-            val resultUri = DocumentsContract.renameDocument(context.contentResolver, uri, newName)
-            if (resultUri != null) {
-                val meta = albumDao.getMetadata(folderUri)
-                if (meta != null && resultUri.toString() != folderUri) {
-                    albumDao.deleteMetadata(folderUri)
-                    albumDao.upsertMetadata(meta.copy(folderUri = resultUri.toString()))
-                }
-                rescan()
-                true
-            } else {
-                false
+            val oldUri = Uri.parse(folderUri)
+            val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, newName)
+                ?: return@withContext false
+
+            // Rebuild the new folder URI in the same tree-based form the scanner uses
+            val authority = oldUri.authority ?: return@withContext false
+            val treeUri = DocumentsContract.buildTreeDocumentUri(
+                authority,
+                DocumentsContract.getTreeDocumentId(oldUri)
+            )
+            val newFolderUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getDocumentId(resultUri)
+            ).toString()
+
+            if (newFolderUri != folderUri) {
+                migrateUriPrefix(folderUri, newFolderUri)
             }
+            rescan()
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to rename album $folderUri to $newName", e)
             false
         }
     }
 
+    /** Returns the remapped URI if [value] is the folder itself or inside it, else null. */
+    private fun remapUri(value: String, oldPrefix: String, newPrefix: String): String? {
+        if (value == oldPrefix) return newPrefix
+        if (value.startsWith("$oldPrefix%2F")) return newPrefix + value.removePrefix(oldPrefix)
+        return null
+    }
+
+    /** After a folder rename, point saved metadata, covers and favorites at the new URIs. */
+    private suspend fun migrateUriPrefix(oldPrefix: String, newPrefix: String) {
+        for (meta in albumDao.getAllMetadata()) {
+            val newFolder = remapUri(meta.folderUri, oldPrefix, newPrefix) ?: continue
+            val newCover = meta.customCoverUri?.let { remapUri(it, oldPrefix, newPrefix) ?: it }
+            albumDao.deleteMetadata(meta.folderUri)
+            albumDao.upsertMetadata(meta.copy(folderUri = newFolder, customCoverUri = newCover))
+        }
+        for (fav in favoriteDao.getAllFavorites()) {
+            val newImage = remapUri(fav.imageUri, oldPrefix, newPrefix)
+            val newAlbum = remapUri(fav.albumUri, oldPrefix, newPrefix)
+            if (newImage == null && newAlbum == null) continue
+            favoriteDao.deleteFavorite(fav.imageUri)
+            favoriteDao.insertFavorite(
+                fav.copy(
+                    imageUri = newImage ?: fav.imageUri,
+                    albumUri = newAlbum ?: fav.albumUri
+                )
+            )
+        }
+    }
+    
     override suspend fun deleteAlbumFromDevice(folderUri: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val uri = Uri.parse(folderUri)

@@ -37,6 +37,7 @@ object ShareHelper {
         zipBaseName: String = "manga_export"
     ) = withContext(Dispatchers.IO) {
         val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
+                shareDir.listFiles()?.forEach { it.delete() }
         val cleanName = zipBaseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
         val zipFile = File(shareDir, "$cleanName.zip")
 

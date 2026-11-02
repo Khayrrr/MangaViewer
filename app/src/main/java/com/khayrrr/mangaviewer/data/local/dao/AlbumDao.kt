@@ -17,6 +17,9 @@ interface AlbumDao {
     @Query("SELECT * FROM album_metadata WHERE folderUri = :folderUri LIMIT 1")
     suspend fun getMetadata(folderUri: String): AlbumMetadataEntity?
 
+    @Query("SELECT * FROM album_metadata")
+    suspend fun getAllMetadata(): List<AlbumMetadataEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertMetadata(metadata: AlbumMetadataEntity)
 
