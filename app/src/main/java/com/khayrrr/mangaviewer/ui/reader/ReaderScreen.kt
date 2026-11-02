@@ -336,6 +336,7 @@ private fun ReaderContent(
             Surface(
                 shape = PillShape,
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -356,7 +357,7 @@ private fun ReaderContent(
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = "Favorite",
-                            tint = if (isFavorite) Color(0xFFFFD54F) else LocalContentColor.current,
+                            tint = LocalContentColor.current,
                             modifier = Modifier.size(20.dp)
                         )
                     }
