@@ -49,18 +49,19 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-- **Phase 4: Reader** (done, merged to `main`)
-  - Vertical continuous reader: no gaps, fit to width, pinch and double-tap zoom, page indicator pill, thin progress bar with the toolbar, resume last page, rolling-window page measuring, progress saved as you read.
-  - Toolbar: favorite star, set as wallpaper (home, lock or both), share, rename and delete the current page, keep-screen-on and hide-system-bars toggles.
-  - Scans now run in the repository's own scope and one at a time, so leaving a screen can no longer cancel a rescan halfway.
+Phase 6 complete (merged to main): PDF support. Each PDF file in a root folder is its own album (page 1 as cover), rendered page by page with PdfRenderer through a Coil fetcher (mvpdf:// URIs), so all reader modes, zoom, seekbar, favorites and progress work on PDFs. Page counts are cached; covers are small and cached on disk; reader pages and covers use separate render queues.
 
-## Known Issues
-- Share as Images on a very large album can exceed Android's intent size limit; use Share as ZIP.
-- Albums removed from the library cannot be restored yet (planned: "Restore removed albums" in Settings).
-- Hiding an album only hides it inside this app; gallery apps still show the files.
-- Renaming the library root folder is blocked inside the app, because Android revokes the app's access to it; rename it in a file manager and add it again.
-- Reader zoom is centered horizontally (not on the pinch point) and has no flick momentum while zoomed.
-- The "Animate GIF & AVIF" setting is not connected to the reader yet.
+## Known issues / limits
+- Zoom is centered, no flick momentum when zoomed
+- Horizontal zoom bounds are measured against the whole screen
+- Share-as-images has a size limit on very large albums
+- Albums hidden before Phase 5 need unhide + re-hide to get .nomedia
+- .nomedia also hides sub-albums in gallery apps
+- PDF: wallpaper, share, rename and delete are hidden for PDF pages
+- PDF: "Share as ZIP" does not work on PDF albums
+- PDF: favorites of a PDF page are lost if the PDF file is renamed
+- PDF: password-protected or damaged PDFs are skipped
+- PDF: first scan after adding many PDFs is slow (page counts are cached afterward)
 
-## Exact Next Step
-- Phase 5: horizontal swipe mode, right-to-left mode, tap zones, landscape double page, and the animate GIF/AVIF setting.
+## Next step
+Choose from backlog: landscape double-page (skipped for now), zoom polish (focus-point zoom, fling), share/wallpaper for PDF pages, share-as-images limit on big albums.

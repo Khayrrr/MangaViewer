@@ -11,6 +11,7 @@ import com.khayrrr.mangaviewer.data.preferences.AppSettings
 import com.khayrrr.mangaviewer.data.preferences.SettingsRepository
 import com.khayrrr.mangaviewer.data.preferences.ReadingDirection
 import com.khayrrr.mangaviewer.data.repository.MangaRepository
+import com.khayrrr.mangaviewer.util.PdfPages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -232,6 +233,9 @@ class ReaderViewModel(
     }
 
     private fun measureAspect(uri: String): Float? {
+        PdfPages.parse(uri)?.let { (src, page) ->
+            return PdfPages.pageAspect(context, src, page)
+        }
         return try {
             context.contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
                 val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
