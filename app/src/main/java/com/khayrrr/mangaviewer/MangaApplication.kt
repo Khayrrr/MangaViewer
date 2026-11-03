@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer
 
+import com.khayrrr.mangaviewer.util.PdfPageFetcher
 import android.app.Application
 import android.os.Build
 import coil3.ImageLoader
@@ -24,6 +25,7 @@ class MangaApplication : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
+                    add(PdfPageFetcher.Factory(context))
                 if (Build.VERSION.SDK_INT >= 28) {
                     add(AnimatedImageDecoder.Factory())
                 } else {

@@ -282,7 +282,9 @@ class MangaRepositoryImpl(
                 // Renaming the picked library folder makes Android revoke the app's access to it
                 return@withContext false
             }
-            val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, newName)
+            val isPdf = DocumentsContract.getDocumentId(oldUri).endsWith(".pdf", ignoreCase = true)
+            val finalName = if (isPdf && !newName.endsWith(".pdf", ignoreCase = true)) "$newName.pdf" else newName
+            val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, finalName)
                 ?: return@withContext false
 
             // Rebuild the new folder URI in the same tree-based form the scanner uses

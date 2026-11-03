@@ -104,6 +104,7 @@ import com.khayrrr.mangaviewer.data.preferences.PageIndicatorFormat
 import com.khayrrr.mangaviewer.data.preferences.ReaderBackground
 import com.khayrrr.mangaviewer.data.preferences.ReadingDirection
 import com.khayrrr.mangaviewer.ui.theme.PillShape
+import com.khayrrr.mangaviewer.util.PdfPages
 import com.khayrrr.mangaviewer.util.ShareHelper
 import com.khayrrr.mangaviewer.util.staticImageRequest
 import kotlinx.coroutines.launch
@@ -390,6 +391,7 @@ private fun ReaderBody(
                 ) {
                     val currentImage = images[currentPage]
                     val isFavorite = favoriteUris.contains(currentImage.uri)
+                    val isPdfPage = PdfPages.isPdfPage(currentImage.uri)
 
                     IconButton(
                         onClick = { viewModel.toggleFavorite(currentImage) },
@@ -420,6 +422,7 @@ private fun ReaderBody(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
+                            if (!isPdfPage) {
                             DropdownMenuItem(
                                 text = { Text("Set as wallpaper") },
                                 leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
@@ -461,6 +464,7 @@ private fun ReaderBody(
                                     pendingAction = ReaderAction.DELETE
                                 }
                             )
+                            }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
