@@ -49,7 +49,7 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-Phase 5 complete (merged to main): reader horizontal mode (LTR/RTL) with zoom and edge page-turning, vertical seekbar, reading direction menu, GIF/AVIF animate setting, Removed Albums screen with restore, .nomedia written when hiding albums.
+Phase 6 complete (merged to main): PDF support. Each PDF file in a root folder is its own album (page 1 as cover), rendered page by page with PdfRenderer through a Coil fetcher (mvpdf:// URIs), so all reader modes, zoom, seekbar, favorites and progress work on PDFs. Page counts are cached; covers are small and cached on disk; reader pages and covers use separate render queues.
 
 ## Known issues / limits
 - Zoom is centered, no flick momentum when zoomed
@@ -57,6 +57,11 @@ Phase 5 complete (merged to main): reader horizontal mode (LTR/RTL) with zoom an
 - Share-as-images has a size limit on very large albums
 - Albums hidden before Phase 5 need unhide + re-hide to get .nomedia
 - .nomedia also hides sub-albums in gallery apps
+- PDF: wallpaper, share, rename and delete are hidden for PDF pages
+- PDF: "Share as ZIP" does not work on PDF albums
+- PDF: favorites of a PDF page are lost if the PDF file is renamed
+- PDF: password-protected or damaged PDFs are skipped
+- PDF: first scan after adding many PDFs is slow (page counts are cached afterward)
 
 ## Next step
-Phase 6: PDF support (each PDF as its own album, rendered with PdfRenderer).
+Choose from backlog: landscape double-page (skipped for now), zoom polish (focus-point zoom, fling), share/wallpaper for PDF pages, share-as-images limit on big albums.
