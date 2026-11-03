@@ -3,6 +3,8 @@ package com.khayrrr.mangaviewer.ui.reader
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -11,6 +13,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -30,20 +33,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +78,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -77,10 +90,13 @@ import com.khayrrr.mangaviewer.data.preferences.AppSettings
 import com.khayrrr.mangaviewer.data.preferences.PageIndicatorFormat
 import com.khayrrr.mangaviewer.data.preferences.ReaderBackground
 import com.khayrrr.mangaviewer.ui.theme.PillShape
+import com.khayrrr.mangaviewer.util.ShareHelper
 import org.koin.androidx.compose.koinViewModel
 
 private const val MAX_ZOOM = 4f
 private const val DEFAULT_ASPECT = 3f / 4f
+
+private enum class ReaderAction { WALLPAPER, RENAME, DELETE }
 
 private fun Context.findActivity(): Activity? {
     var current: Context = this
@@ -109,6 +125,7 @@ fun ReaderScreen(
     val aspects by viewModel.aspects.collectAsState()
     val favoriteUris by viewModel.favoriteImageUris.collectAsState()
 
+    val context = LocalContext.current
     val view = LocalView.current
     val activity = remember(view) { view.context.findActivity() }
     var uiVisible by remember { mutableStateOf(false) }
@@ -116,6 +133,12 @@ fun ReaderScreen(
 
     LaunchedEffect(albumUri, initialPage) {
         viewModel.load(albumUri, initialPage)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     LaunchedEffect(barsHidden) {
@@ -193,6 +216,7 @@ private fun ReaderContent(
     onNavigateBack: () -> Unit,
     viewModel: ReaderViewModel
 ) {
+    val context = LocalContext.current
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage)
     val currentPage by remember(images) {
         derivedStateOf {
@@ -213,6 +237,9 @@ private fun ReaderContent(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var boxWidth by remember { mutableFloatStateOf(0f) }
     val toggleUi by rememberUpdatedState(onToggleUi)
+
+    var pendingAction by remember { mutableStateOf<ReaderAction?>(null) }
+    var actionImage by remember { mutableStateOf<ImageItem?>(null) }
 
     val systemInsets = WindowInsets.systemBars.asPaddingValues()
     val contentPadding = if (settings.hideSystemBars) {
@@ -336,7 +363,7 @@ private fun ReaderContent(
             Surface(
                 shape = PillShape,
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -380,6 +407,50 @@ private fun ReaderContent(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Set as wallpaper") },
+                                leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    actionImage = currentImage
+                                    pendingAction = ReaderAction.WALLPAPER
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share image") },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    ShareHelper.shareSingleImage(
+                                        context,
+                                        Uri.parse(currentImage.uri),
+                                        currentImage.mimeType
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Rename image") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    actionImage = currentImage
+                                    pendingAction = ReaderAction.RENAME
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete image") },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    actionImage = currentImage
+                                    pendingAction = ReaderAction.DELETE
+                                }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            DropdownMenuItem(
                                 text = { Text("Keep screen on") },
                                 trailingIcon = {
                                     Switch(checked = settings.keepScreenOn, onCheckedChange = null)
@@ -407,6 +478,106 @@ private fun ReaderContent(
                     .navigationBarsPadding()
                     .height(3.dp)
             )
+        }
+    }
+
+    // Dialogs for the page actions
+    val target = actionImage
+    if (target != null) {
+        when (pendingAction) {
+            ReaderAction.WALLPAPER -> {
+                AlertDialog(
+                    onDismissRequest = { pendingAction = null },
+                    title = { Text("Set as wallpaper") },
+                    text = {
+                        Column {
+                            listOf(
+                                WallpaperTarget.HOME to "Home screen",
+                                WallpaperTarget.LOCK to "Lock screen",
+                                WallpaperTarget.BOTH to "Home and lock screens"
+                            ).forEach { (wallpaperTarget, label) ->
+                                TextButton(
+                                    onClick = {
+                                        pendingAction = null
+                                        viewModel.setWallpaper(target, wallpaperTarget)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(label)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(onClick = { pendingAction = null }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            ReaderAction.RENAME -> {
+                var renameInput by remember(target.uri) {
+                    mutableStateOf(target.name.substringBeforeLast('.'))
+                }
+                val ext = target.name.substringAfterLast('.', "")
+                val valid = renameInput.isNotBlank() && !renameInput.contains('/')
+                AlertDialog(
+                    onDismissRequest = { pendingAction = null },
+                    title = { Text("Rename image") },
+                    text = {
+                        OutlinedTextField(
+                            value = renameInput,
+                            onValueChange = { renameInput = it },
+                            label = { Text("File name") },
+                            suffix = { if (ext.isNotEmpty()) Text(".$ext") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            enabled = valid,
+                            onClick = {
+                                pendingAction = null
+                                viewModel.renameImage(target, renameInput.trim())
+                            }
+                        ) {
+                            Text("Rename")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingAction = null }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            ReaderAction.DELETE -> {
+                AlertDialog(
+                    onDismissRequest = { pendingAction = null },
+                    title = { Text("Delete image?") },
+                    text = {
+                        Text("\"${target.name}\" will be permanently deleted from your device. This cannot be undone.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                pendingAction = null
+                                viewModel.deleteImage(target)
+                            },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingAction = null }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            null -> Unit
         }
     }
 }

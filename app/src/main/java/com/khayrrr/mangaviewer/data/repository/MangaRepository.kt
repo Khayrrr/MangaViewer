@@ -48,6 +48,8 @@ interface MangaRepository {
     suspend fun renameAlbum(folderUri: String, newName: String): Boolean
     suspend fun deleteAlbumFromDevice(folderUri: String): Boolean
     suspend fun removeAlbumFromLibrary(folderUri: String)
+    suspend fun renameImage(imageUri: String, newName: String): String?
+    suspend fun deleteImage(imageUri: String): Boolean
 }
 
 class MangaRepositoryImpl(
@@ -295,3 +297,50 @@ class MangaRepositoryImpl(
         albumDao.setRemoved(folderUri, true)
     }
 }
+
+    override suspend fun renameImage(imageUri: String, newName: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val oldUri = Uri.parse(imageUri)
+            val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, newName)
+                ?: return@withContext null
+            val authority = oldUri.authority ?: return@withContext null
+            val treeUri = DocumentsContract.buildTreeDocumentUri(
+                authority,
+                DocumentsContract.getTreeDocumentId(oldUri)
+            )
+            val newUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getDocumentId(resultUri)
+            ).toString()
+
+            if (newUri != imageUri) {
+                favoriteDao.getAllFavorites().firstOrNull { it.imageUri == imageUri }?.let { fav ->
+                    favoriteDao.deleteFavorite(imageUri)
+                    favoriteDao.insertFavorite(fav.copy(imageUri = newUri, imageName = newName))
+                }
+                albumDao.getAllMetadata().filter { it.customCoverUri == imageUri }.forEach { meta ->
+                    albumDao.upsertMetadata(meta.copy(customCoverUri = newUri))
+                }
+            }
+            newUri
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename image $imageUri", e)
+            null
+        }
+    }
+
+    override suspend fun deleteImage(imageUri: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val deleted = DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(imageUri))
+            if (deleted) {
+                favoriteDao.deleteFavorite(imageUri)
+                albumDao.getAllMetadata().filter { it.customCoverUri == imageUri }.forEach { meta ->
+                    albumDao.upsertMetadata(meta.copy(customCoverUri = null))
+                }
+            }
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete image $imageUri", e)
+            false
+        }
+    }
