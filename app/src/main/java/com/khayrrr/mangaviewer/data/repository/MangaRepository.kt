@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 interface MangaRepository {
     val albumsFlow: StateFlow<List<Album>>
@@ -48,6 +51,8 @@ interface MangaRepository {
     suspend fun renameAlbum(folderUri: String, newName: String): Boolean
     suspend fun deleteAlbumFromDevice(folderUri: String): Boolean
     suspend fun removeAlbumFromLibrary(folderUri: String)
+    suspend fun renameImage(imageUri: String, newName: String): String?
+    suspend fun deleteImage(imageUri: String): Boolean
 }
 
 class MangaRepositoryImpl(
@@ -110,32 +115,44 @@ class MangaRepositoryImpl(
         }
     }
 
+    private val scanMutex = Mutex()
+
     override suspend fun rescan() {
         val settings = settingsRepository.settingsFlow.first()
-        scanConfiguredFolders(settings.rootFolderUris)
+        // Runs in the repository's own scope, so leaving a screen never cancels a scan halfway
+        repositoryScope.launch { scanConfiguredFolders(settings.rootFolderUris) }.join()
     }
 
-    private suspend fun scanConfiguredFolders(uris: Set<String>) = withContext(Dispatchers.IO) {
-        if (uris.isEmpty()) {
-            _scannedAlbums.value = emptyList()
-            return@withContext
-        }
+    private suspend fun scanConfiguredFolders(uris: Set<String>) {
+        scanMutex.withLock {
+            withContext(Dispatchers.IO) {
+                if (uris.isEmpty()) {
+                    _scannedAlbums.value = emptyList()
+                    return@withContext
+                }
 
-        _isScanning.value = true
-        val allResults = mutableListOf<ScannedAlbumResult>()
+                _isScanning.value = true
+                try {
+                    val allResults = mutableListOf<ScannedAlbumResult>()
 
-        for (uriString in uris) {
-            try {
-                val uri = Uri.parse(uriString)
-                val results = scanner.scanRootFolder(uri)
-                allResults.addAll(results)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error scanning root folder $uriString", e)
+                    for (uriString in uris) {
+                        try {
+                            val uri = Uri.parse(uriString)
+                            val results = scanner.scanRootFolder(uri)
+                            allResults.addAll(results)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error scanning root folder $uriString", e)
+                        }
+                    }
+
+                    _scannedAlbums.value = allResults
+                } finally {
+                    _isScanning.value = false
+                }
             }
         }
-
-        _scannedAlbums.value = allResults
-        _isScanning.value = false
     }
 
     override suspend fun addRootFolder(treeUri: Uri) {
@@ -293,5 +310,52 @@ class MangaRepositoryImpl(
        override suspend fun removeAlbumFromLibrary(folderUri: String) {
         ensureMetadataExists(folderUri)
         albumDao.setRemoved(folderUri, true)
+    }
+
+    override suspend fun renameImage(imageUri: String, newName: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val oldUri = Uri.parse(imageUri)
+            val resultUri = DocumentsContract.renameDocument(context.contentResolver, oldUri, newName)
+                ?: return@withContext null
+            val authority = oldUri.authority ?: return@withContext null
+            val treeUri = DocumentsContract.buildTreeDocumentUri(
+                authority,
+                DocumentsContract.getTreeDocumentId(oldUri)
+            )
+            val newUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getDocumentId(resultUri)
+            ).toString()
+
+            if (newUri != imageUri) {
+                favoriteDao.getAllFavorites().firstOrNull { it.imageUri == imageUri }?.let { fav ->
+                    favoriteDao.deleteFavorite(imageUri)
+                    favoriteDao.insertFavorite(fav.copy(imageUri = newUri, imageName = newName))
+                }
+                albumDao.getAllMetadata().filter { it.customCoverUri == imageUri }.forEach { meta ->
+                    albumDao.upsertMetadata(meta.copy(customCoverUri = newUri))
+                }
+            }
+            newUri
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename image $imageUri", e)
+            null
+        }
+    }
+
+    override suspend fun deleteImage(imageUri: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val deleted = DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(imageUri))
+            if (deleted) {
+                favoriteDao.deleteFavorite(imageUri)
+                albumDao.getAllMetadata().filter { it.customCoverUri == imageUri }.forEach { meta ->
+                    albumDao.upsertMetadata(meta.copy(customCoverUri = null))
+                }
+            }
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete image $imageUri", e)
+            false
+        }
     }
 }

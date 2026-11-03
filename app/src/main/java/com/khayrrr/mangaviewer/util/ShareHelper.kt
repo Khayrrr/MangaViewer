@@ -30,6 +30,18 @@ object ShareHelper {
         }
         context.startActivity(chooser)
     }
+    
+    fun shareSingleImage(context: Context, imageUri: Uri, mimeType: String, title: String = "Share image") {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType.ifBlank { "image/*" }
+            putExtra(Intent.EXTRA_STREAM, imageUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(intent, title).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
+    }
 
     suspend fun shareAlbumsAsZip(
         context: Context,

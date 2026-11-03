@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -13,9 +14,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +34,12 @@ data class ReaderState(
     val startPage: Int = 0
 )
 
+enum class WallpaperTarget(val flags: Int) {
+    HOME(WallpaperManager.FLAG_SYSTEM),
+    LOCK(WallpaperManager.FLAG_LOCK),
+    BOTH(WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+}
+
 class ReaderViewModel(
     private val context: Context,
     private val mangaRepository: MangaRepository,
@@ -42,6 +52,10 @@ class ReaderViewModel(
     /** width / height of each page, measured ahead of the reading position. */
     private val _aspects = MutableStateFlow<Map<String, Float>>(emptyMap())
     val aspects: StateFlow<Map<String, Float>> = _aspects.asStateFlow()
+
+    /** Short messages for the screen to show (toasts). */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     val settings: StateFlow<AppSettings> = settingsRepository.settingsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
@@ -111,8 +125,8 @@ class ReaderViewModel(
         if (total == 0) return
         mangaRepository.updateReadingProgress(
             albumUri,
-            page + 1,
-            (page + 1).toFloat() / total
+            (page + 1).coerceAtMost(total),
+            (page + 1).coerceAtMost(total).toFloat() / total
         )
     }
 
@@ -134,6 +148,66 @@ class ReaderViewModel(
 
     fun setHideSystemBars(hide: Boolean) {
         viewModelScope.launch { settingsRepository.setHideSystemBars(hide) }
+    }
+
+    // ---- Stage B: page actions ----
+
+    fun setWallpaper(image: ImageItem, target: WallpaperTarget) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openInputStream(Uri.parse(image.uri))?.use { input ->
+                        WallpaperManager.getInstance(context).setStream(input, null, true, target.flags)
+                        true
+                    } ?: false
+                } catch (e: Exception) {
+                    false
+                }
+            }
+            _messages.tryEmit(if (ok) "Wallpaper set" else "Could not set wallpaper")
+        }
+    }
+
+    /** [baseName] is the new name without extension; the original extension is kept. */
+    fun renameImage(image: ImageItem, baseName: String) {
+        val ext = image.name.substringAfterLast('.', "")
+        val finalName = if (ext.isEmpty()) baseName else "$baseName.$ext"
+        viewModelScope.launch {
+            val newUri = mangaRepository.renameImage(image.uri, finalName)
+            if (newUri == null) {
+                _messages.tryEmit("Could not rename image")
+                return@launch
+            }
+            _aspects.value[image.uri]?.let { aspect ->
+                _aspects.update { it + (newUri to aspect) }
+            }
+            refreshImages()
+            _messages.tryEmit("Image renamed")
+            launch { mangaRepository.rescan() }
+        }
+    }
+
+    fun deleteImage(image: ImageItem) {
+        viewModelScope.launch {
+            val ok = mangaRepository.deleteImage(image.uri)
+            if (!ok) {
+                _messages.tryEmit("Could not delete image")
+                return@launch
+            }
+            refreshImages()
+            _messages.tryEmit("Image deleted")
+            launch { mangaRepository.rescan() }
+        }
+    }
+
+    private suspend fun refreshImages() {
+        val loaded = try {
+            mangaRepository.getImagesForAlbum(albumUri)
+        } catch (e: Exception) {
+            return
+        }
+        images = loaded
+        _state.value = _state.value.copy(images = loaded)
     }
 
     private suspend fun measureRange(from: Int, to: Int) {

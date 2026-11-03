@@ -49,13 +49,10 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-- **Phase 3: Selection mode, album actions, Hidden and Favorites screens** (done, merged to `main`)
-  - Selection mode, Remove (library or device), Pin, Rename (library root renaming blocked), Share (images or ZIP), Change cover, Edit tags, Hide, Details.
-  - Hidden Albums screen with once-per-session biometric lock, Favorites screen.
-  - Room database v2 with migration, fixed debug keystore, `.debug` package suffix for debug builds.
-- **Phase 4: Reader** (in progress, branch `phase4-reader`)
-  - Stage A (done): vertical continuous reader, no gaps, fit to width, pinch and double-tap zoom, page indicator pill, thin progress bar with the toolbar, resume last page, favorite star, keep-screen-on and hide-system-bars toggles in the reader menu, rolling-window page measuring, progress saved as you read.
-  - Stage B (next): toolbar actions (set wallpaper, rename, delete, share a page) and the animate GIF/AVIF setting.
+- **Phase 4: Reader** (done, merged to `main`)
+  - Vertical continuous reader: no gaps, fit to width, pinch and double-tap zoom, page indicator pill, thin progress bar with the toolbar, resume last page, rolling-window page measuring, progress saved as you read.
+  - Toolbar: favorite star, set as wallpaper (home, lock or both), share, rename and delete the current page, keep-screen-on and hide-system-bars toggles.
+  - Scans now run in the repository's own scope and one at a time, so leaving a screen can no longer cancel a rescan halfway.
 
 ## Known Issues
 - Share as Images on a very large album can exceed Android's intent size limit; use Share as ZIP.
@@ -63,6 +60,7 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
 - Hiding an album only hides it inside this app; gallery apps still show the files.
 - Renaming the library root folder is blocked inside the app, because Android revokes the app's access to it; rename it in a file manager and add it again.
 - Reader zoom is centered horizontally (not on the pinch point) and has no flick momentum while zoomed.
+- The "Animate GIF & AVIF" setting is not connected to the reader yet.
 
 ## Exact Next Step
-- Reader Stage B: set wallpaper, rename image, delete image, share image, and the animate GIF/AVIF setting.
+- Phase 5: horizontal swipe mode, right-to-left mode, tap zones, landscape double page, and the animate GIF/AVIF setting.
