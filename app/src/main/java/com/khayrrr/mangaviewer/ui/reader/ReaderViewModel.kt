@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.khayrrr.mangaviewer.data.model.ImageItem
 import com.khayrrr.mangaviewer.data.preferences.AppSettings
 import com.khayrrr.mangaviewer.data.preferences.SettingsRepository
+import com.khayrrr.mangaviewer.data.preferences.ReadingDirection
 import com.khayrrr.mangaviewer.data.repository.MangaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -148,6 +149,10 @@ class ReaderViewModel(
 
     fun setHideSystemBars(hide: Boolean) {
         viewModelScope.launch { settingsRepository.setHideSystemBars(hide) }
+    }
+
+    fun setReadingDirection(direction: ReadingDirection) {
+        viewModelScope.launch { settingsRepository.setReadingDirection(direction) }
     }
 
     // ---- Stage B: page actions ----
