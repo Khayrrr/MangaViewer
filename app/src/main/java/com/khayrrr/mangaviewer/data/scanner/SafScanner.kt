@@ -10,6 +10,7 @@ import com.khayrrr.mangaviewer.util.NaturalOrderComparator
 import com.khayrrr.mangaviewer.util.PdfPages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.content.SharedPreferences
 
 class SafScanner(
     private val context: Context
@@ -42,6 +43,19 @@ class SafScanner(
     }
 
     private val contentResolver: ContentResolver get() = context.contentResolver
+    private val pageCountCache: SharedPreferences by lazy {
+        context.getSharedPreferences("pdf_page_counts", Context.MODE_PRIVATE)
+    }
+
+    /** Page count from the cache when the file is unchanged; otherwise opens the PDF once. */
+    private fun cachedPageCount(pdfUri: String, size: Long, lastModified: Long): Int {
+        val key = "$pdfUri|$size|$lastModified"
+        val cached = pageCountCache.getInt(key, 0)
+        if (cached > 0) return cached
+        val counted = PdfPages.pageCount(context, pdfUri)
+        if (counted > 0) pageCountCache.edit().putInt(key, counted).apply()
+        return counted
+    }
 
     /**
      * Recursively scans a root folder tree URI for all albums
@@ -143,7 +157,7 @@ class SafScanner(
         // Every PDF file is its own album
         for (pdf in pdfFiles) {
             val pdfUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, pdf.docId).toString()
-            val pages = PdfPages.pageCount(context, pdfUri)
+            val pages = cachedPageCount(pdfUri, pdf.size, pdf.lastModified)
             if (pages <= 0) Log.w(TAG, "PDF page count failed for ${pdf.name}")
 
             val baseName = pdf.name.substringBeforeLast('.', pdf.name)
@@ -227,7 +241,7 @@ class SafScanner(
     }
 
     private fun pdfPagesAsImages(pdfUri: String, info: PdfInfo): List<ImageItem> {
-        val pages = PdfPages.pageCount(context, pdfUri)
+        val pages = cachedPageCount(pdfUri, info.size, info.lastModified)
         val baseName = info.name.substringBeforeLast('.', info.name)
         return (0 until pages).map { index ->
             ImageItem(
