@@ -296,7 +296,6 @@ class MangaRepositoryImpl(
         ensureMetadataExists(folderUri)
         albumDao.setRemoved(folderUri, true)
     }
-}
 
     override suspend fun renameImage(imageUri: String, newName: String): String? = withContext(Dispatchers.IO) {
         try {
@@ -344,3 +343,4 @@ class MangaRepositoryImpl(
             false
         }
     }
+}
