@@ -10,7 +10,7 @@ import coil3.fetch.Fetcher
 import coil3.fetch.ImageFetchResult
 import coil3.request.Options
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runInterruptible
 
 /** Lets Coil load "mvpdf://" page URIs by rendering the PDF page. */
 class PdfPageFetcher(
@@ -19,9 +19,10 @@ class PdfPageFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
-        val (src, page) = PdfPages.parse(data) ?: return null
-        val bitmap = withContext(Dispatchers.IO) {
-            PdfPages.render(context, src, page, RENDER_WIDTH)
+        val ref = PdfPages.parseRef(data) ?: return null
+        // runInterruptible: if the request is cancelled (e.g. scrolled away), stop waiting
+        val bitmap = runInterruptible(Dispatchers.IO) {
+            PdfPages.render(context, ref)
         } ?: return null
         return ImageFetchResult(
             image = bitmap.asImage(),
@@ -40,9 +41,5 @@ class PdfPageFetcher(
                 null
             }
         }
-    }
-
-    private companion object {
-        const val RENDER_WIDTH = 1400
     }
 }

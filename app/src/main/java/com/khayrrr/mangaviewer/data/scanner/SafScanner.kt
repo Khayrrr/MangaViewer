@@ -170,7 +170,7 @@ class SafScanner(
                     path = "$currentPath/$baseName",
                     totalImages = pages,
                     totalSize = pdf.size,
-                    defaultCoverUri = PdfPages.pageUri(pdfUri, 0),
+                    defaultCoverUri = PdfPages.thumbnailUri(pdfUri, 0, pdf.lastModified),
                     lastModified = pdf.lastModified
                 )
             )
