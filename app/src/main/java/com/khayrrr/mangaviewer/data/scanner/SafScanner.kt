@@ -144,7 +144,7 @@ class SafScanner(
         for (pdf in pdfFiles) {
             val pdfUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, pdf.docId).toString()
             val pages = PdfPages.pageCount(context, pdfUri)
-            if (pages <= 0) continue // damaged or password-protected
+            if (pages <= 0) Log.w(TAG, "PDF page count failed for ${pdf.name}")
 
             val baseName = pdf.name.substringBeforeLast('.', pdf.name)
             results.add(
