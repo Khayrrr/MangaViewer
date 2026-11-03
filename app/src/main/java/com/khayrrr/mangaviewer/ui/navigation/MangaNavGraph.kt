@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.navigation
 
+import com.khayrrr.mangaviewer.ui.removed.RemovedAlbumsScreen
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -54,6 +55,7 @@ fun MangaNavGraph(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToFavorites = { navController.navigate(Screen.Favorites.route) },
                 onNavigateToHidden = { navController.navigate(Screen.HiddenAlbums.route) },
+                onNavigateToRemoved = { navController.navigate(Screen.RemovedAlbums.route) },
                 onOpenReader = { albumUri ->
                     navController.navigate(Screen.Reader.createRoute(albumUri))
                 }
@@ -104,6 +106,12 @@ fun MangaNavGraph(
                 onOpenFavorite = { albumUri, page ->
                     navController.navigate(Screen.Reader.createRoute(albumUri, page))
                 }
+            )
+        }
+
+                composable(Screen.RemovedAlbums.route) {
+            RemovedAlbumsScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

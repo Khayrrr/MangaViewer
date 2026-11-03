@@ -17,6 +17,7 @@ import com.khayrrr.mangaviewer.ui.settings.SettingsViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import com.khayrrr.mangaviewer.ui.removed.RemovedAlbumsViewModel
 
 val appModule = module {
     // Room Database
@@ -58,4 +59,5 @@ val appModule = module {
     viewModel { HiddenAlbumsViewModel(mangaRepository = get(), settingsRepository = get()) }
     viewModel { FavoritesViewModel(mangaRepository = get()) }
     viewModel { ReaderViewModel(context = androidContext(), mangaRepository = get(), settingsRepository = get()) }
+    viewModel { RemovedAlbumsViewModel(mangaRepository = get()) }
 }

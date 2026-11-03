@@ -51,6 +51,7 @@ interface MangaRepository {
     suspend fun renameAlbum(folderUri: String, newName: String): Boolean
     suspend fun deleteAlbumFromDevice(folderUri: String): Boolean
     suspend fun removeAlbumFromLibrary(folderUri: String)
+    suspend fun restoreAlbum(folderUri: String)
     suspend fun renameImage(imageUri: String, newName: String): String?
     suspend fun deleteImage(imageUri: String): Boolean
 }
@@ -185,6 +186,48 @@ class MangaRepositoryImpl(
     override suspend fun setHidden(folderUri: String, isHidden: Boolean) {
         ensureMetadataExists(folderUri)
         albumDao.setHidden(folderUri, isHidden)
+        withContext(Dispatchers.IO) { applyNoMedia(folderUri, isHidden) }
+    }
+
+    /** Creates or removes a ".nomedia" file so gallery apps skip this folder. */
+    private fun applyNoMedia(folderUri: String, hide: Boolean) {
+        try {
+            val resolver = context.contentResolver
+            val folder = Uri.parse(folderUri)
+            val folderDocId = DocumentsContract.getDocumentId(folder)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(folder, folderDocId)
+
+            var foundDocId: String? = null
+            resolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null, null, null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(1) == ".nomedia") {
+                        foundDocId = cursor.getString(0)
+                        break
+                    }
+                }
+            }
+            val existingId = foundDocId
+
+            if (hide && existingId == null) {
+                DocumentsContract.createDocument(
+                    resolver, folder, "application/octet-stream", ".nomedia"
+                )
+            } else if (!hide && existingId != null) {
+                DocumentsContract.deleteDocument(
+                    resolver, DocumentsContract.buildDocumentUriUsingTree(folder, existingId)
+                )
+            }
+        } catch (e: Exception) {
+            // Hiding inside the app still works even if the file can't be written
+            Log.w(TAG, "Could not update .nomedia for $folderUri", e)
+        }
     }
 
     override suspend fun setCustomCover(folderUri: String, coverUri: String?) {
@@ -310,6 +353,11 @@ class MangaRepositoryImpl(
        override suspend fun removeAlbumFromLibrary(folderUri: String) {
         ensureMetadataExists(folderUri)
         albumDao.setRemoved(folderUri, true)
+    }
+
+        override suspend fun restoreAlbum(folderUri: String) {
+        ensureMetadataExists(folderUri)
+        albumDao.setRemoved(folderUri, false)
     }
 
     override suspend fun renameImage(imageUri: String, newName: String): String? = withContext(Dispatchers.IO) {
