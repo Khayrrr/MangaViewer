@@ -114,6 +114,7 @@ import com.khayrrr.mangaviewer.ui.home.components.AlbumMiniGridCard
 import com.khayrrr.mangaviewer.util.ShareHelper
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.material.icons.filled.RestoreFromTrash
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,6 +123,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToHidden: () -> Unit,
+    onNavigateToRemoved: () -> Unit,
     onOpenReader: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -439,6 +441,15 @@ fun HomeScreen(
                                     onClick = {
                                         menuExpanded = false
                                         onNavigateToHidden()
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("Removed albums") },
+                                    leadingIcon = { Icon(Icons.Default.RestoreFromTrash, contentDescription = null) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onNavigateToRemoved()
                                     }
                                 )
 
