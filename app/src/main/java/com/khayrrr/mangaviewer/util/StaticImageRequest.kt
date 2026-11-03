@@ -8,6 +8,8 @@ import coil3.request.ImageRequest
 fun staticImageRequest(context: Context, uri: String): ImageRequest {
     return ImageRequest.Builder(context)
         .data(uri)
+        // Separate cache entry so still frames never get served to animated requests
+        .memoryCacheKey("static:$uri")
         .decoderFactory(BitmapFactoryDecoder.Factory())
         .build()
 }
