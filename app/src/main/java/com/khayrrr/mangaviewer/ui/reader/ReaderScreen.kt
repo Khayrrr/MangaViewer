@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
@@ -28,9 +29,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -42,16 +48,18 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -62,9 +70,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,18 +91,24 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.khayrrr.mangaviewer.data.model.ImageItem
 import com.khayrrr.mangaviewer.data.preferences.AppSettings
 import com.khayrrr.mangaviewer.data.preferences.PageIndicatorFormat
 import com.khayrrr.mangaviewer.data.preferences.ReaderBackground
+import com.khayrrr.mangaviewer.data.preferences.ReadingDirection
 import com.khayrrr.mangaviewer.ui.theme.PillShape
 import com.khayrrr.mangaviewer.util.ShareHelper
+import com.khayrrr.mangaviewer.util.staticImageRequest
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
 private const val MAX_ZOOM = 4f
 private const val DEFAULT_ASPECT = 3f / 4f
@@ -204,6 +221,7 @@ fun ReaderScreen(
     }
 }
 
+/** Rebuilds the reading surface when the direction changes, keeping the current page. */
 @Composable
 private fun ReaderContent(
     images: List<ImageItem>,
@@ -216,27 +234,70 @@ private fun ReaderContent(
     onNavigateBack: () -> Unit,
     viewModel: ReaderViewModel
 ) {
+    var lastPage by remember { mutableIntStateOf(startPage) }
+
+    key(settings.readingDirection) {
+        val initialPage = remember { lastPage.coerceIn(0, images.lastIndex) }
+        ReaderBody(
+            images = images,
+            initialPage = initialPage,
+            aspects = aspects,
+            favoriteUris = favoriteUris,
+            settings = settings,
+            uiVisible = uiVisible,
+            onToggleUi = onToggleUi,
+            onNavigateBack = onNavigateBack,
+            onPageChanged = { lastPage = it },
+            viewModel = viewModel
+        )
+    }
+}
+
+@Composable
+private fun ReaderBody(
+    images: List<ImageItem>,
+    initialPage: Int,
+    aspects: Map<String, Float>,
+    favoriteUris: Set<String>,
+    settings: AppSettings,
+    uiVisible: Boolean,
+    onToggleUi: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onPageChanged: (Int) -> Unit,
+    viewModel: ReaderViewModel
+) {
     val context = LocalContext.current
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage)
-    val currentPage by remember(images) {
+    val isVertical = settings.readingDirection == ReadingDirection.VERTICAL
+    val rtl = settings.readingDirection == ReadingDirection.RTL
+
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage)
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { images.size })
+
+    val currentPage by remember(images, isVertical) {
         derivedStateOf {
-            val info = listState.layoutInfo
-            if (info.totalItemsCount > 0 && !listState.canScrollForward) {
-                images.lastIndex
+            if (isVertical) {
+                val info = listState.layoutInfo
+                if (info.totalItemsCount > 0 && !listState.canScrollForward) {
+                    images.lastIndex
+                } else {
+                    listState.firstVisibleItemIndex.coerceIn(0, images.lastIndex)
+                }
             } else {
-                listState.firstVisibleItemIndex.coerceIn(0, images.lastIndex)
+                pagerState.currentPage.coerceIn(0, images.lastIndex)
             }
         }
     }
 
     LaunchedEffect(currentPage) {
         viewModel.onPageChanged(currentPage)
+        onPageChanged(currentPage)
     }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var boxWidth by remember { mutableFloatStateOf(0f) }
-    val toggleUi by rememberUpdatedState(onToggleUi)
+    // Seekbar (vertical mode): jump to the dragged page
+    var seekTarget by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(seekTarget) {
+        if (seekTarget >= 0) listState.scrollToItem(seekTarget)
+    }
 
     var pendingAction by remember { mutableStateOf<ReaderAction?>(null) }
     var actionImage by remember { mutableStateOf<ImageItem?>(null) }
@@ -252,94 +313,47 @@ private fun ReaderContent(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Reading column with tap, double-tap and pinch zoom
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { boxWidth = it.width.toFloat() }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { toggleUi() },
-                        onDoubleTap = {
-                            if (scale > 1f) {
-                                scale = 1f
-                                offsetX = 0f
-                            } else {
-                                scale = 2f
-                            }
-                        }
-                    )
-                }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val pressedCount = event.changes.count { it.pressed }
-                            if (pressedCount > 1 || scale > 1f) {
-                                val zoom = event.calculateZoom()
-                                val pan = event.calculatePan()
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                val oldScale = scale
-                                val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
-                                var newOffset = offsetX
-                                if (centroid.isSpecified && oldScale > 0f) {
-                                    val q = centroid.x - boxWidth / 2f
-                                    newOffset = q - (newScale / oldScale) * (q - newOffset)
-                                }
-                                newOffset += pan.x
-                                val maxOffset = (newScale - 1f) * boxWidth / 2f
-                                offsetX = newOffset.coerceIn(-maxOffset, maxOffset)
-                                scale = newScale
-                                if (newScale > 1f && pan.y != 0f) {
-                                    listState.dispatchRawDelta(-pan.y / newScale)
-                                }
-                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
-                }
-        ) {
-            LazyColumn(
-                state = listState,
+        if (isVertical) {
+            VerticalPages(
+                images = images,
+                aspects = aspects,
+                listState = listState,
                 contentPadding = contentPadding,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offsetX
-                    }
-            ) {
-                items(images, key = { it.uri }) { image ->
-                    ReaderPage(
-                        image = image,
-                        aspect = aspects[image.uri],
-                        onAspectKnown = { viewModel.reportAspect(image.uri, it) }
-                    )
-                }
-            }
+                animate = settings.animateGifAvif,
+                onToggleUi = onToggleUi,
+                onAspectKnown = { uri, aspect -> viewModel.reportAspect(uri, aspect) }
+            )
+        } else {
+            HorizontalPages(
+                images = images,
+                pagerState = pagerState,
+                rtl = rtl,
+                animate = settings.animateGifAvif,
+                onToggleUi = onToggleUi
+            )
         }
 
-        // Page indicator (always visible)
-        val label = when (settings.pageIndicatorFormat) {
-            PageIndicatorFormat.COUNT -> "${currentPage + 1}/${images.size}"
-            PageIndicatorFormat.PERCENT -> "${((currentPage + 1) * 100) / images.size}%"
-        }
-        Surface(
-            shape = PillShape,
-            color = Color.Black.copy(alpha = 0.55f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 12.dp, bottom = 16.dp)
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-            )
+        // Page indicator: always in horizontal mode; in vertical mode the seekbar replaces it
+        if (!isVertical || !uiVisible) {
+            val label = when (settings.pageIndicatorFormat) {
+                PageIndicatorFormat.COUNT -> "${currentPage + 1}/${images.size}"
+                PageIndicatorFormat.PERCENT -> "${((currentPage + 1) * 100) / images.size}%"
+            }
+            Surface(
+                shape = PillShape,
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 12.dp, bottom = 16.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
         }
 
         if (uiVisible) {
@@ -450,6 +464,28 @@ private fun ReaderContent(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
+                            listOf(
+                                ReadingDirection.VERTICAL to "Vertical scroll",
+                                ReadingDirection.LTR to "Left to right",
+                                ReadingDirection.RTL to "Right to left"
+                            ).forEach { (direction, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = {
+                                        RadioButton(
+                                            selected = settings.readingDirection == direction,
+                                            onClick = null
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.setReadingDirection(direction)
+                                    }
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
                             DropdownMenuItem(
                                 text = { Text("Keep screen on") },
                                 trailingIcon = {
@@ -469,15 +505,18 @@ private fun ReaderContent(
                 }
             }
 
-            // Thin progress bar (only with the toolbar)
-            LinearProgressIndicator(
-                progress = { (currentPage + 1).toFloat() / images.size },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .height(3.dp)
-            )
+            // Seekbar (vertical mode only)
+            if (isVertical && images.size > 1) {
+                SeekBar(
+                    currentPage = currentPage,
+                    total = images.size,
+                    onSeek = { seekTarget = it },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                )
+            }
         }
     }
 
@@ -564,7 +603,7 @@ private fun ReaderContent(
                                 pendingAction = null
                                 viewModel.deleteImage(target)
                             },
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
                         ) {
@@ -583,25 +622,307 @@ private fun ReaderContent(
 }
 
 @Composable
-private fun ReaderPage(
-    image: ImageItem,
-    aspect: Float?,
-    onAspectKnown: (Float) -> Unit
+private fun SeekBar(
+    currentPage: Int,
+    total: Int,
+    onSeek: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
+    val value = if (dragging) dragValue else currentPage.toFloat()
+    val shownPage = value.roundToInt().coerceIn(0, total - 1)
+
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (dragging) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Black.copy(alpha = 0.75f)
+            ) {
+                Text(
+                    text = "${shownPage + 1} / $total",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Surface(
+            shape = PillShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "${shownPage + 1}", style = MaterialTheme.typography.labelMedium)
+                Slider(
+                    value = value,
+                    onValueChange = {
+                        dragging = true
+                        dragValue = it
+                        onSeek(it.roundToInt())
+                    },
+                    onValueChangeFinished = { dragging = false },
+                    valueRange = 0f..(total - 1).toFloat(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+                Text(text = "$total", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageImage(
+    image: ImageItem,
+    animate: Boolean,
+    contentScale: ContentScale,
+    modifier: Modifier = Modifier,
+    onSuccess: ((AsyncImagePainter.State.Success) -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val model: Any = remember(image.uri, animate) {
+        if (animate) image.uri else staticImageRequest(context, image.uri)
+    }
     AsyncImage(
-        model = image.uri,
+        model = model,
         contentDescription = image.name,
-        contentScale = ContentScale.FillWidth,
-        onSuccess = { success ->
-            if (aspect == null) {
-                val size = success.painter.intrinsicSize
-                if (size.isSpecified && size.height > 0f) {
-                    onAspectKnown(size.width / size.height)
+        contentScale = contentScale,
+        onSuccess = onSuccess,
+        modifier = modifier
+    )
+}
+
+/** Vertical continuous reading column with pinch / double-tap zoom. */
+@Composable
+private fun VerticalPages(
+    images: List<ImageItem>,
+    aspects: Map<String, Float>,
+    listState: LazyListState,
+    contentPadding: PaddingValues,
+    animate: Boolean,
+    onToggleUi: () -> Unit,
+    onAspectKnown: (String, Float) -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var boxWidth by remember { mutableFloatStateOf(0f) }
+    val toggleUi by rememberUpdatedState(onToggleUi)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { boxWidth = it.width.toFloat() }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { toggleUi() },
+                    onDoubleTap = {
+                        if (scale > 1f) {
+                            scale = 1f
+                            offsetX = 0f
+                        } else {
+                            scale = 2f
+                        }
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount > 1 || scale > 1f) {
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val centroid = event.calculateCentroid(useCurrent = true)
+                            val oldScale = scale
+                            val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
+                            var newOffset = offsetX
+                            if (centroid.isSpecified && oldScale > 0f) {
+                                val q = centroid.x - boxWidth / 2f
+                                newOffset = q - (newScale / oldScale) * (q - newOffset)
+                            }
+                            newOffset += pan.x
+                            val maxOffset = (newScale - 1f) * boxWidth / 2f
+                            offsetX = newOffset.coerceIn(-maxOffset, maxOffset)
+                            scale = newScale
+                            if (newScale > 1f && pan.y != 0f) {
+                                listState.dispatchRawDelta(-pan.y / newScale)
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
                 }
             }
-        },
+    ) {
+        LazyColumn(
+            state = listState,
+            contentPadding = contentPadding,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                }
+        ) {
+            items(images, key = { it.uri }) { image ->
+                val aspect = aspects[image.uri]
+                PageImage(
+                    image = image,
+                    animate = animate,
+                    contentScale = ContentScale.FillWidth,
+                    onSuccess = { success ->
+                        if (aspect == null) {
+                            val size = success.painter.intrinsicSize
+                            if (size.isSpecified && size.height > 0f) {
+                                onAspectKnown(image.uri, size.width / size.height)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(aspect ?: DEFAULT_ASPECT)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One page per swipe (left-to-right or right-to-left). When a page is zoomed in, dragging
+ * moves the image first; once an edge is reached, dragging further turns the page.
+ */
+@Composable
+private fun HorizontalPages(
+    images: List<ImageItem>,
+    pagerState: PagerState,
+    rtl: Boolean,
+    animate: Boolean,
+    onToggleUi: () -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var zoomPage by remember { mutableIntStateOf(pagerState.currentPage) }
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
+    val toggleUi by rememberUpdatedState(onToggleUi)
+    val scope = rememberCoroutineScope()
+
+    // After a page turn from a zoomed page: settle, then reset zoom for the new page
+    val onGestureEnd: () -> Unit = {
+        scope.launch {
+            if (pagerState.currentPageOffsetFraction != 0f) {
+                pagerState.animateScrollToPage(pagerState.currentPage)
+            }
+            if (pagerState.currentPage != zoomPage) {
+                scale = 1f
+                offsetX = 0f
+                offsetY = 0f
+                zoomPage = pagerState.currentPage
+            }
+        }
+    }
+
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(aspect ?: DEFAULT_ASPECT)
-    )
+            .fillMaxSize()
+            .onSizeChanged { boxSize = it }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { toggleUi() },
+                    onDoubleTap = {
+                        if (scale > 1f) {
+                            scale = 1f
+                            offsetX = 0f
+                            offsetY = 0f
+                        } else {
+                            zoomPage = pagerState.currentPage
+                            scale = 2f
+                        }
+                    }
+                )
+            }
+            .pointerInput(rtl) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    var handled = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount > 1 || scale > 1f) {
+                            handled = true
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val centroid = event.calculateCentroid(useCurrent = true)
+                            val oldScale = scale
+                            val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
+                            if (oldScale <= 1f && newScale > 1f) {
+                                zoomPage = pagerState.currentPage
+                            }
+                            var newX = offsetX
+                            var newY = offsetY
+                            if (centroid.isSpecified && oldScale > 0f) {
+                                val qx = centroid.x - boxSize.width / 2f
+                                val qy = centroid.y - boxSize.height / 2f
+                                newX = qx - (newScale / oldScale) * (qx - newX)
+                                newY = qy - (newScale / oldScale) * (qy - newY)
+                            }
+                            newX += pan.x
+                            newY += pan.y
+                            val maxX = (newScale - 1f) * boxSize.width / 2f
+                            val maxY = (newScale - 1f) * boxSize.height / 2f
+                            val clampedX = newX.coerceIn(-maxX, maxX)
+                            val leftover = newX - clampedX
+                            offsetX = clampedX
+                            offsetY = newY.coerceIn(-maxY, maxY)
+                            scale = newScale
+
+                            // One finger pushing past the image edge turns the page
+                            if (pressedCount == 1 && newScale > 1f && leftover != 0f) {
+                                pagerState.dispatchRawDelta(if (rtl) leftover else -leftover)
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (handled) onGestureEnd()
+                }
+            }
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            reverseLayout = rtl,
+            beyondViewportPageCount = 1,
+            key = { index -> images.getOrNull(index)?.uri ?: index },
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val image = images.getOrNull(page)
+            if (image != null) {
+                val zoomed = page == zoomPage
+                PageImage(
+                    image = image,
+                    animate = animate,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            if (zoomed) {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
+                        }
+                )
+            }
+        }
+    }
 }
