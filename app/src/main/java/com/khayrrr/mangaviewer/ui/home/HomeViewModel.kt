@@ -179,3 +179,124 @@ class HomeViewModel(
     fun setViewStyle(style: AlbumViewStyle) {
         viewModelScope.launch {
             settingsRepository.setViewStyle(style)
+                    }
+    }
+
+    fun setSortBy(sortBy: AlbumSortBy) {
+        viewModelScope.launch {
+            settingsRepository.setSortBy(sortBy)
+        }
+    }
+
+    fun setSortOrder(order: SortOrder) {
+        viewModelScope.launch {
+            settingsRepository.setSortOrder(order)
+        }
+    }
+
+    fun setSort(sortBy: AlbumSortBy, order: SortOrder?) {
+        viewModelScope.launch {
+            settingsRepository.setSortBy(sortBy)
+            if (order != null) settingsRepository.setSortOrder(order)
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            mangaRepository.rescan()
+        }
+    }
+
+    fun addRootFolder(uri: Uri) {
+        viewModelScope.launch {
+            mangaRepository.addRootFolder(uri)
+        }
+    }
+
+    // Selection Mode
+    fun toggleAlbumSelection(uri: String) {
+        val current = _selectedAlbumUris.value.toMutableSet()
+        if (current.contains(uri)) {
+            current.remove(uri)
+        } else {
+            current.add(uri)
+        }
+        _selectedAlbumUris.value = current
+    }
+
+    fun enterSelectionMode(uri: String) {
+        _selectedAlbumUris.value = setOf(uri)
+    }
+
+    fun clearSelection() {
+        _selectedAlbumUris.value = emptySet()
+    }
+
+    fun selectAll() {
+        _selectedAlbumUris.value = uiState.value.albums.map { it.uri }.toSet()
+    }
+
+    fun getSelectedAlbums(): List<Album> {
+        val selectedSet = _selectedAlbumUris.value
+        return uiState.value.albums.filter { selectedSet.contains(it.uri) }
+    }
+
+    fun removeSelectedAlbums(fromDevice: Boolean) {
+        val selected = getSelectedAlbums()
+        viewModelScope.launch {
+            selected.forEach { album ->
+                if (fromDevice) {
+                    mangaRepository.deleteAlbumFromDevice(album.uri)
+                } else {
+                    mangaRepository.removeAlbumFromLibrary(album.uri)
+                }
+            }
+            clearSelection()
+        }
+    }
+
+    fun togglePinSelectedAlbum() {
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
+        // If everything is already pinned, unpin; otherwise pin all
+        val pin = !selected.all { it.isPinned }
+        viewModelScope.launch {
+            selected.forEach { mangaRepository.setPinned(it.uri, pin) }
+            clearSelection()
+        }
+    }
+
+    fun renameSelectedAlbum(newName: String) {
+        val album = getSelectedAlbums().firstOrNull() ?: return
+        viewModelScope.launch {
+            mangaRepository.renameAlbum(album.uri, newName)
+            clearSelection()
+        }
+    }
+
+    fun hideSelectedAlbum() {
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            selected.forEach { mangaRepository.setHidden(it.uri, true) }
+            clearSelection()
+        }
+    }
+
+    fun setCustomCover(albumUri: String, coverUri: String) {
+        viewModelScope.launch {
+            mangaRepository.setCustomCover(albumUri, coverUri)
+            clearSelection()
+        }
+    }
+
+    fun setAlbumTags(albumUri: String, tags: List<String>) {
+        viewModelScope.launch {
+            mangaRepository.setTags(albumUri, tags)
+        }
+    }
+
+    suspend fun getImagesForAlbum(albumUri: String): List<ImageItem> {
+        return mangaRepository.getImagesForAlbum(albumUri)
+    }
+}
