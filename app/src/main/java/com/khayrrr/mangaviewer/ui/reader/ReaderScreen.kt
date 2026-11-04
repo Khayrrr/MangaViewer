@@ -1,5 +1,13 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate as animateValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.exponentialDecay
@@ -365,20 +373,24 @@ private fun ReaderBody(
             }
         }
 
-        // End of the album: button to jump back to the first page
-        if (images.size > 1 && currentPage == images.lastIndex) {
+                // End of the album: button to jump back to the first page
+        AnimatedVisibility(
+            visible = images.size > 1 && currentPage == images.lastIndex,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = if (isVertical && uiVisible) 96.dp else 56.dp)
+        ) {
             Surface(
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 12.dp, bottom = if (isVertical && uiVisible) 96.dp else 56.dp)
+                color = Color.Black.copy(alpha = 0.55f)
             ) {
                 IconButton(
                     onClick = {
                         scope.launch {
-                            if (isVertical) listState.scrollToItem(0) else pagerState.scrollToPage(0)
+                            if (isVertical) listState.animateScrollToItem(0) else pagerState.animateScrollToPage(0)
                         }
                     }
                 ) {
@@ -766,18 +778,25 @@ private fun VerticalPages(
                     onDoubleTap = { tap ->
                         flingJobs.forEach { it.cancel() }
                         flingJobs.clear()
-                        if (scale > 1f) {
-                            scale = 1f
-                            offsetX = 0f
-                        } else {
-                            val newScale = 2f
-                            val qx = tap.x - boxSize.width / 2f
-                            val qy = tap.y - boxSize.height / 2f
-                            val maxX = (newScale - 1f) * boxSize.width / 2f
-                            offsetX = (-qx).coerceIn(-maxX, maxX)
-                            // Keep the tapped spot under the finger
-                            listState.dispatchRawDelta(qy - qy / newScale)
-                            scale = newScale
+                        val startScale = scale
+                        val startOffset = offsetX
+                        val targetScale = if (startScale > 1f) 1f else 2f
+                        val qx = tap.x - boxSize.width / 2f
+                        val qy = tap.y - boxSize.height / 2f
+                        flingJobs += scope.launch {
+                            var prevScale = startScale
+                            animateValue(
+                                0f, 1f,
+                                animationSpec = tween(260, easing = FastOutSlowInEasing)
+                            ) { t, _ ->
+                                val s = startScale + (targetScale - startScale) * t
+                                val maxX = (s - 1f) * boxSize.width / 2f
+                                offsetX = (qx - (s / startScale) * (qx - startOffset)).coerceIn(-maxX, maxX)
+                                // Keep the tapped spot under the finger while scaling
+                                listState.dispatchRawDelta(qy / prevScale - qy / s)
+                                prevScale = s
+                                scale = s
+                            }
                         }
                     }
                 )
@@ -804,7 +823,6 @@ private fun VerticalPages(
                                 val qx = centroid.x - boxSize.width / 2f
                                 newOffset = qx - (newScale / oldScale) * (qx - newOffset)
                                 if (newScale != oldScale) {
-                                    // Zoom toward the fingers vertically by shifting the scroll position
                                     val qy = centroid.y - boxSize.height / 2f
                                     listState.dispatchRawDelta(qy / oldScale - qy / newScale)
                                 }
@@ -936,20 +954,25 @@ private fun HorizontalPages(
                     onDoubleTap = { tap ->
                         flingJobs.forEach { it.cancel() }
                         flingJobs.clear()
-                        if (scale > 1f) {
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        } else {
-                            zoomPage = pagerState.currentPage
-                            val newScale = 2f
-                            val qx = tap.x - boxSize.width / 2f
-                            val qy = tap.y - boxSize.height / 2f
-                            val maxX = (newScale - 1f) * boxSize.width / 2f
-                            val maxY = (newScale - 1f) * boxSize.height / 2f
-                            offsetX = (-qx).coerceIn(-maxX, maxX)
-                            offsetY = (-qy).coerceIn(-maxY, maxY)
-                            scale = newScale
+                        val startScale = scale
+                        val startX = offsetX
+                        val startY = offsetY
+                        val targetScale = if (startScale > 1f) 1f else 2f
+                        if (targetScale > 1f) zoomPage = pagerState.currentPage
+                        val qx = tap.x - boxSize.width / 2f
+                        val qy = tap.y - boxSize.height / 2f
+                        flingJobs += scope.launch {
+                            animateValue(
+                                0f, 1f,
+                                animationSpec = tween(260, easing = FastOutSlowInEasing)
+                            ) { t, _ ->
+                                val s = startScale + (targetScale - startScale) * t
+                                val maxX = (s - 1f) * boxSize.width / 2f
+                                val maxY = (s - 1f) * boxSize.height / 2f
+                                offsetX = (qx - (s / startScale) * (qx - startX)).coerceIn(-maxX, maxX)
+                                offsetY = (qy - (s / startScale) * (qy - startY)).coerceIn(-maxY, maxY)
+                                scale = s
+                            }
                         }
                     }
                 )

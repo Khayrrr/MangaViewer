@@ -215,9 +215,21 @@ class HomeViewModel(
     }
 
     fun togglePinSelectedAlbum() {
-        val album = getSelectedAlbums().firstOrNull() ?: return
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
+        // If everything is already pinned, unpin; otherwise pin all
+        val pin = !selected.all { it.isPinned }
         viewModelScope.launch {
-            mangaRepository.setPinned(album.uri, !album.isPinned)
+            selected.forEach { mangaRepository.setPinned(it.uri, pin) }
+            clearSelection()
+        }
+    }
+
+    fun hideSelectedAlbum() {
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            selected.forEach { mangaRepository.setHidden(it.uri, true) }
             clearSelection()
         }
     }
@@ -230,19 +242,15 @@ class HomeViewModel(
         }
     }
 
-    fun hideSelectedAlbum() {
-        val album = getSelectedAlbums().firstOrNull() ?: return
-        viewModelScope.launch {
-            mangaRepository.setHidden(album.uri, true)
-            clearSelection()
-        }
-    }
-
     fun setCustomCover(albumUri: String, coverUri: String) {
         viewModelScope.launch {
             mangaRepository.setCustomCover(albumUri, coverUri)
             clearSelection()
         }
+    }
+
+    fun selectAll() {
+        _selectedAlbumUris.value = uiState.value.albums.map { it.uri }.toSet()
     }
 
     fun setAlbumTags(albumUri: String, tags: List<String>) {
