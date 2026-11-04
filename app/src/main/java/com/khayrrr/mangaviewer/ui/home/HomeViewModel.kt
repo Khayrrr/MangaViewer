@@ -31,7 +31,7 @@ data class HomeUiState(
     val isScanning: Boolean = false,
     val hasRootFolders: Boolean = false,
     val selectedAlbumUris: Set<String> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
     val tagFilters: List<String> = emptyList()
 )
 
