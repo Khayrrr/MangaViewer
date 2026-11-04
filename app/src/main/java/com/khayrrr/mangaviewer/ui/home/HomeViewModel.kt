@@ -32,13 +32,15 @@ data class HomeUiState(
     val hasRootFolders: Boolean = false,
     val selectedAlbumUris: Set<String> = emptySet(),
     val isSelectionMode: Boolean = false
+    val tagFilters: List<String> = emptyList()
 )
 
 private data class HomeExtras(
     val query: String,
     val searchActive: Boolean,
     val selectedUris: Set<String>,
-    val isScanning: Boolean
+    val isScanning: Boolean,
+    val tagFilters: List<String>
 )
 
 class HomeViewModel(
@@ -54,13 +56,14 @@ class HomeViewModel(
 
     private val _selectedAlbumUris = MutableStateFlow<Set<String>>(emptySet())
 
-    private val extrasFlow = combine(
+       private val extrasFlow = combine(
         _searchQuery,
         _isSearchActive,
         _selectedAlbumUris,
-        mangaRepository.isScanning
-    ) { query, searchActive, selectedUris, isScanning ->
-        HomeExtras(query, searchActive, selectedUris, isScanning)
+        mangaRepository.isScanning,
+        _tagFilters
+    ) { query, searchActive, selectedUris, isScanning, tagFilters ->
+        HomeExtras(query, searchActive, selectedUris, isScanning, tagFilters)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -74,7 +77,14 @@ class HomeViewModel(
         val isScanning = extras.isScanning
 
         // Filter visible non-hidden albums
-        val visibleAlbums = albums.filter { !it.isHidden && !it.isRemoved }
+        val visibleBase = albums.filter { !it.isHidden && !it.isRemoved }
+        val visibleAlbums = if (tagFilters.isEmpty()) {
+            visibleBase
+        } else {
+            visibleBase.filter { album ->
+                tagFilters.all { filter -> album.tags.any { it.lowercase().contains(filter) } }
+            }
+        }
 
         // Filter by search query (name AND tags)
         val filteredAlbums = if (query.isBlank()) {
@@ -105,7 +115,8 @@ class HomeViewModel(
             isScanning = isScanning,
             hasRootFolders = settings.rootFolderUris.isNotEmpty(),
             selectedAlbumUris = selectedUris,
-            isSelectionMode = selectedUris.isNotEmpty()
+            isSelectionMode = selectedUris.isNotEmpty(),
+            tagFilters = tagFilters
         )
     }.stateIn(
         scope = viewModelScope,
@@ -143,7 +154,21 @@ class HomeViewModel(
         _isSearchActive.value = active
         if (!active) {
             _searchQuery.value = ""
+            _tagFilters.value = emptyList()
         }
+    }
+
+    fun addTagFilter(raw: String) {
+        val tag = raw.trim().lowercase()
+        if (tag.isEmpty()) return
+        if (!_tagFilters.value.contains(tag)) {
+            _tagFilters.value = _tagFilters.value + tag
+        }
+        _searchQuery.value = ""
+    }
+
+    fun removeTagFilter(tag: String) {
+        _tagFilters.value = _tagFilters.value - tag
     }
 
     fun setViewStyle(style: AlbumViewStyle) {
@@ -161,6 +186,13 @@ class HomeViewModel(
     fun setSortOrder(order: SortOrder) {
         viewModelScope.launch {
             settingsRepository.setSortOrder(order)
+        }
+    }
+
+    fun setSort(sortBy: AlbumSortBy, order: SortOrder?) {
+        viewModelScope.launch {
+            settingsRepository.setSortBy(sortBy)
+            if (order != null) settingsRepository.setSortOrder(order)
         }
     }
 

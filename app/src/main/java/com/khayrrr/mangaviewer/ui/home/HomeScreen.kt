@@ -146,7 +146,6 @@ fun HomeScreen(
     var contextMenuExpanded by remember { mutableStateOf(false) }
     var showViewStyleDialog by remember { mutableStateOf(false) }
     var showSortByDialog by remember { mutableStateOf(false) }
-    var showOrderDialog by remember { mutableStateOf(false) }
 
     // Action dialog states
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -334,43 +333,93 @@ fun HomeScreen(
                         shadowElevation = 4.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            IconButton(onClick = {
-                                viewModel.setSearchActive(false)
-                                focusManager.clearFocus()
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowBack,
-                                    contentDescription = "Close Search"
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = {
+                                    viewModel.setSearchActive(false)
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowBack,
+                                        contentDescription = "Close Search"
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = uiState.searchQuery,
+                                    onValueChange = { viewModel.onSearchQueryChange(it) },
+                                    placeholder = { Text("Search titles & tags, + for tag filter") },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                                    modifier = Modifier.weight(1f)
                                 )
+
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear text"
+                                        )
+                                    }
+                                }
+
+                                // Add the typed text as a tag filter
+                                IconButton(
+                                    enabled = uiState.searchQuery.isNotBlank(),
+                                    onClick = { viewModel.addTagFilter(uiState.searchQuery) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add tag filter"
+                                    )
+                                }
                             }
 
-                            OutlinedTextField(
-                                value = uiState.searchQuery,
-                                onValueChange = { viewModel.onSearchQueryChange(it) },
-                                placeholder = { Text("Search titles and tags…") },
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent
-                                ),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            if (uiState.searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear text"
-                                    )
+                            if (uiState.tagFilters.isNotEmpty()) {
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
+                                ) {
+                                    uiState.tagFilters.forEach { tag ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = tag,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Remove tag filter",
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .clickable { viewModel.removeTagFilter(tag) }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -421,21 +470,6 @@ fun HomeScreen(
                                     onClick = {
                                         menuExpanded = false
                                         showSortByDialog = true
-                                    }
-                                )
-
-                                val isAlphabetical = uiState.sortBy == AlbumSortBy.ALPHABETICAL
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Order",
-                                            color = if (isAlphabetical) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                    },
-                                    enabled = isAlphabetical,
-                                    onClick = {
-                                        menuExpanded = false
-                                        showOrderDialog = true
                                     }
                                 )
 
@@ -515,7 +549,10 @@ fun HomeScreen(
 
                 uiState.albums.isEmpty() && !uiState.isScanning -> {
                     EmptyAlbumsPrompt(
-                        searchQuery = uiState.searchQuery,
+                        searchQuery = if (uiState.searchQuery.isBlank() && uiState.tagFilters.isNotEmpty())
+                            uiState.tagFilters.joinToString(", ")
+                        else
+                            uiState.searchQuery,
                         onAddFolder = { folderPickerLauncher.launch(null) }
                     )
                 }
@@ -1061,31 +1098,33 @@ fun HomeScreen(
 
     // Sort By Dialog
     if (showSortByDialog) {
+        val options = listOf(
+            Triple("Name (A to Z)", AlbumSortBy.ALPHABETICAL, SortOrder.ASCENDING),
+            Triple("Name (Z to A)", AlbumSortBy.ALPHABETICAL, SortOrder.DESCENDING),
+            Triple("Last modified", AlbumSortBy.LAST_MODIFIED, null),
+            Triple("Oldest", AlbumSortBy.OLDEST, null)
+        )
         AlertDialog(
             onDismissRequest = { showSortByDialog = false },
             title = { Text("Sort By") },
             text = {
                 Column {
-                    listOf(
-                        AlbumSortBy.ALPHABETICAL to "Alphabetical",
-                        AlbumSortBy.LAST_MODIFIED to "Last modified",
-                        AlbumSortBy.OLDEST to "Oldest"
-                    ).forEach { (sort, label) ->
+                    options.forEach { (label, sort, order) ->
+                        val selected = uiState.sortBy == sort &&
+                            (order == null || uiState.sortOrder == order)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = uiState.sortBy == sort,
-                                onClick = {
-                                    viewModel.setSortBy(sort)
+                                .clickable {
+                                    viewModel.setSort(sort, order)
                                     showSortByDialog = false
                                 }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(modifier = Modifier.width(16.dp))
                             Text(label, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
@@ -1093,45 +1132,6 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showSortByDialog = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-
-    // Order Dialog (Ascending / Descending)
-    if (showOrderDialog) {
-        AlertDialog(
-            onDismissRequest = { showOrderDialog = false },
-            title = { Text("Sort Order") },
-            text = {
-                Column {
-                    listOf(
-                        SortOrder.ASCENDING to "Ascending (A to Z)",
-                        SortOrder.DESCENDING to "Descending (Z to A)"
-                    ).forEach { (order, label) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = uiState.sortOrder == order,
-                                onClick = {
-                                    viewModel.setSortOrder(order)
-                                    showOrderDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showOrderDialog = false }) {
                     Text("Close")
                 }
             }
