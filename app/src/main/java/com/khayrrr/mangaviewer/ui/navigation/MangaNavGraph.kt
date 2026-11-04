@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.navigation
 
+import com.khayrrr.mangaviewer.ui.about.AboutScreen
 import com.khayrrr.mangaviewer.ui.removed.RemovedAlbumsScreen
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
@@ -66,7 +67,8 @@ fun MangaNavGraph(
             val settingsViewModel: SettingsViewModel = koinViewModel()
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAbout = { navController.navigate(Screen.About.route) }
             )
         }
 
@@ -111,6 +113,11 @@ fun MangaNavGraph(
 
                 composable(Screen.RemovedAlbums.route) {
             RemovedAlbumsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+                composable(Screen.About.route) {
+            AboutScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

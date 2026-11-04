@@ -1,5 +1,12 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlinx.coroutines.Job
+import kotlin.math.abs
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -268,6 +275,7 @@ private fun ReaderBody(
     viewModel: ReaderViewModel
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val isVertical = settings.readingDirection == ReadingDirection.VERTICAL
     val rtl = settings.readingDirection == ReadingDirection.RTL
 
@@ -354,6 +362,32 @@ private fun ReaderBody(
                     color = Color.White,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
+            }
+        }
+
+        // End of the album: button to jump back to the first page
+        if (images.size > 1 && currentPage == images.lastIndex) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 12.dp, bottom = if (isVertical && uiVisible) 96.dp else 56.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            if (isVertical) listState.scrollToItem(0) else pagerState.scrollToPage(0)
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Back to first page",
+                        tint = Color.White
+                    )
+                }
             }
         }
 
@@ -704,7 +738,7 @@ private fun PageImage(
     )
 }
 
-/** Vertical continuous reading column with pinch / double-tap zoom. */
+/** Vertical continuous reading column with pinch / double-tap zoom and flick momentum. */
 @Composable
 private fun VerticalPages(
     images: List<ImageItem>,
@@ -717,22 +751,33 @@ private fun VerticalPages(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
-    var boxWidth by remember { mutableFloatStateOf(0f) }
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
     val toggleUi by rememberUpdatedState(onToggleUi)
+    val scope = rememberCoroutineScope()
+    val flingJobs = remember { mutableListOf<Job>() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged { boxWidth = it.width.toFloat() }
+            .onSizeChanged { boxSize = it }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { toggleUi() },
-                    onDoubleTap = {
+                    onDoubleTap = { tap ->
+                        flingJobs.forEach { it.cancel() }
+                        flingJobs.clear()
                         if (scale > 1f) {
                             scale = 1f
                             offsetX = 0f
                         } else {
-                            scale = 2f
+                            val newScale = 2f
+                            val qx = tap.x - boxSize.width / 2f
+                            val qy = tap.y - boxSize.height / 2f
+                            val maxX = (newScale - 1f) * boxSize.width / 2f
+                            offsetX = (-qx).coerceIn(-maxX, maxX)
+                            // Keep the tapped spot under the finger
+                            listState.dispatchRawDelta(qy - qy / newScale)
+                            scale = newScale
                         }
                     }
                 )
@@ -740,10 +785,15 @@ private fun VerticalPages(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    flingJobs.forEach { it.cancel() }
+                    flingJobs.clear()
+                    val tracker = VelocityTracker()
+                    var handled = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (pressedCount > 1 || scale > 1f) {
+                            handled = true
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
                             val centroid = event.calculateCentroid(useCurrent = true)
@@ -751,19 +801,58 @@ private fun VerticalPages(
                             val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
                             var newOffset = offsetX
                             if (centroid.isSpecified && oldScale > 0f) {
-                                val q = centroid.x - boxWidth / 2f
-                                newOffset = q - (newScale / oldScale) * (q - newOffset)
+                                val qx = centroid.x - boxSize.width / 2f
+                                newOffset = qx - (newScale / oldScale) * (qx - newOffset)
+                                if (newScale != oldScale) {
+                                    // Zoom toward the fingers vertically by shifting the scroll position
+                                    val qy = centroid.y - boxSize.height / 2f
+                                    listState.dispatchRawDelta(qy / oldScale - qy / newScale)
+                                }
                             }
                             newOffset += pan.x
-                            val maxOffset = (newScale - 1f) * boxWidth / 2f
+                            val maxOffset = (newScale - 1f) * boxSize.width / 2f
                             offsetX = newOffset.coerceIn(-maxOffset, maxOffset)
                             scale = newScale
                             if (newScale > 1f && pan.y != 0f) {
                                 listState.dispatchRawDelta(-pan.y / newScale)
                             }
+                            if (pressedCount == 1) {
+                                event.changes.firstOrNull { it.pressed }?.let {
+                                    tracker.addPosition(it.uptimeMillis, it.position)
+                                }
+                            } else {
+                                tracker.resetTracking()
+                            }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
+
+                    if (handled && scale > 1f) {
+                        val velocity = tracker.calculateVelocity()
+                        if (abs(velocity.x) > 200f) {
+                            flingJobs += scope.launch {
+                                var last = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = velocity.x)
+                                    .animateDecay(exponentialDecay()) {
+                                        val d = value - last
+                                        last = value
+                                        val max = (scale - 1f) * boxSize.width / 2f
+                                        offsetX = (offsetX + d).coerceIn(-max, max)
+                                    }
+                            }
+                        }
+                        if (abs(velocity.y) > 200f) {
+                            flingJobs += scope.launch {
+                                var last = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = velocity.y)
+                                    .animateDecay(exponentialDecay()) {
+                                        val d = value - last
+                                        last = value
+                                        listState.dispatchRawDelta(-d / scale)
+                                    }
+                            }
+                        }
+                    }
                 }
             }
     ) {
@@ -820,6 +909,7 @@ private fun HorizontalPages(
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     val toggleUi by rememberUpdatedState(onToggleUi)
     val scope = rememberCoroutineScope()
+    val flingJobs = remember { mutableListOf<Job>() }
 
     // After a page turn from a zoomed page: settle, then reset zoom for the new page
     val onGestureEnd: () -> Unit = {
@@ -843,14 +933,23 @@ private fun HorizontalPages(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { toggleUi() },
-                    onDoubleTap = {
+                    onDoubleTap = { tap ->
+                        flingJobs.forEach { it.cancel() }
+                        flingJobs.clear()
                         if (scale > 1f) {
                             scale = 1f
                             offsetX = 0f
                             offsetY = 0f
                         } else {
                             zoomPage = pagerState.currentPage
-                            scale = 2f
+                            val newScale = 2f
+                            val qx = tap.x - boxSize.width / 2f
+                            val qy = tap.y - boxSize.height / 2f
+                            val maxX = (newScale - 1f) * boxSize.width / 2f
+                            val maxY = (newScale - 1f) * boxSize.height / 2f
+                            offsetX = (-qx).coerceIn(-maxX, maxX)
+                            offsetY = (-qy).coerceIn(-maxY, maxY)
+                            scale = newScale
                         }
                     }
                 )
@@ -858,7 +957,11 @@ private fun HorizontalPages(
             .pointerInput(rtl) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    flingJobs.forEach { it.cancel() }
+                    flingJobs.clear()
+                    val tracker = VelocityTracker()
                     var handled = false
+                    var turned = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
@@ -892,12 +995,50 @@ private fun HorizontalPages(
 
                             // One finger pushing past the image edge turns the page
                             if (pressedCount == 1 && newScale > 1f && leftover != 0f) {
+                                turned = true
                                 pagerState.dispatchRawDelta(if (rtl) leftover else -leftover)
+                            }
+                            if (pressedCount == 1) {
+                                event.changes.firstOrNull { it.pressed }?.let {
+                                    tracker.addPosition(it.uptimeMillis, it.position)
+                                }
+                            } else {
+                                tracker.resetTracking()
                             }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
-                    if (handled) onGestureEnd()
+
+                    if (handled) {
+                        onGestureEnd()
+                        if (!turned && scale > 1f) {
+                            val velocity = tracker.calculateVelocity()
+                            if (abs(velocity.x) > 200f) {
+                                flingJobs += scope.launch {
+                                    var last = 0f
+                                    AnimationState(initialValue = 0f, initialVelocity = velocity.x)
+                                        .animateDecay(exponentialDecay()) {
+                                            val d = value - last
+                                            last = value
+                                            val max = (scale - 1f) * boxSize.width / 2f
+                                            offsetX = (offsetX + d).coerceIn(-max, max)
+                                        }
+                                }
+                            }
+                            if (abs(velocity.y) > 200f) {
+                                flingJobs += scope.launch {
+                                    var last = 0f
+                                    AnimationState(initialValue = 0f, initialVelocity = velocity.y)
+                                        .animateDecay(exponentialDecay()) {
+                                            val d = value - last
+                                            last = value
+                                            val max = (scale - 1f) * boxSize.height / 2f
+                                            offsetY = (offsetY + d).coerceIn(-max, max)
+                                        }
+                                }
+                            }
+                        }
+                    }
                 }
             }
     ) {

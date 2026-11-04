@@ -15,4 +15,5 @@ sealed class Screen(val route: String) {
     data object HiddenAlbums : Screen("hidden_albums")
     data object Favorites : Screen("favorites")
     data object RemovedAlbums : Screen("removed_albums")
+    data object About : Screen("about")
 }
