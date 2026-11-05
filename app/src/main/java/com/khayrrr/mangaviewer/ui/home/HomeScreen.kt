@@ -131,6 +131,7 @@ fun HomeScreen(
     onOpenReader: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val allTags by viewModel.allTags.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -929,6 +930,46 @@ fun HomeScreen(
                             }
                         ) {
                             Text("Add")
+                        }
+                    }
+
+                    val typedTag = newTagInput.trim()
+                    if (typedTag.length >= 2) {
+                        val q = typedTag.lowercase()
+                        val suggestions = allTags
+                            .filter {
+                                !currentTags.contains(it) &&
+                                    !it.equals(typedTag, ignoreCase = true) &&
+                                    it.lowercase().contains(q)
+                            }
+                            .sortedBy { if (it.lowercase().startsWith(q)) 0 else 1 }
+                            .take(6)
+
+                        if (suggestions.isNotEmpty()) {
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                suggestions.forEach { suggestion ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        onClick = {
+                                            currentTags.add(suggestion)
+                                            newTagInput = ""
+                                        }
+                                    ) {
+                                        Text(
+                                            text = suggestion,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 

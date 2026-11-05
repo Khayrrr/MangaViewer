@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import kotlinx.coroutines.flow.map
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -128,6 +129,22 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HomeUiState()
     )
+
+    /** Every tag used on any album, most used first. */
+    val allTags: StateFlow<List<String>> = mangaRepository.albumsFlow
+        .map { albums ->
+            albums.flatMap { it.tags }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .map { it.key }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     private fun createAlbumComparator(sortBy: AlbumSortBy, sortOrder: SortOrder): Comparator<Album> {
         return Comparator { a, b ->
