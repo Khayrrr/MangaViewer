@@ -488,7 +488,7 @@ private fun ReaderBody(
 
                         DropdownMenu(
                             expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
+                            onDismissRequest = { menuExpanded = false },
                             containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f)
                         ) {
                             if (!isPdfPage) {
