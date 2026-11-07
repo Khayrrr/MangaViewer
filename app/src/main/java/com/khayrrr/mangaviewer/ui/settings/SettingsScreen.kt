@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.settings
 
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.filled.ChevronRight
 import android.content.Intent
 import android.net.Uri
@@ -345,8 +346,10 @@ fun SettingsScreen(
                 SettingsSwitchRow(
                     title = "Landscape Double-Page",
                     subtitle = "Side-by-side spread in landscape orientation",
-                    checked = settings.landscapeDoublePage,
-                    onCheckedChange = { viewModel.setLandscapeDoublePage(it) }
+                    checked = false,
+                    onCheckedChange = {},
+                    enabled = false,
+                    note = "Not implemented"
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -621,13 +624,16 @@ private fun SettingsSwitchRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    note: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -651,10 +657,19 @@ private fun SettingsSwitchRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (note != null) {
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
         )
     }
 }

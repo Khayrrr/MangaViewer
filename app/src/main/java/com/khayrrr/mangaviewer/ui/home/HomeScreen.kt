@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import com.khayrrr.mangaviewer.ui.settings.SettingsViewModel
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -150,6 +151,9 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val statusBarTop = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val settingsViewModel: SettingsViewModel = koinViewModel()
+    val appSettings by settingsViewModel.settings.collectAsState()
+    var showFolderDialog by remember { mutableStateOf(false) }
     val allTags by viewModel.allTags.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -162,7 +166,6 @@ fun HomeScreen(
     }
 
     // Top menu states
-    var folderMenuExpanded by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var contextMenuExpanded by remember { mutableStateOf(false) }
     var showViewStyleDialog by remember { mutableStateOf(false) }
@@ -481,39 +484,16 @@ fun HomeScreen(
                             )
                         },
                         actions = {
-                            Box {
-                                FilledTonalIconButton(
-                                    onClick = { folderMenuExpanded = true },
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CreateNewFolder,
-                                        contentDescription = "Add or manage folders",
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = folderMenuExpanded,
-                                    onDismissRequest = { folderMenuExpanded = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Add folder") },
-                                        leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
-                                        onClick = {
-                                            folderMenuExpanded = false
-                                            folderPickerLauncher.launch(null)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Manage folders") },
-                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                        onClick = {
-                                            folderMenuExpanded = false
-                                            onNavigateToSettings()
-                                        }
-                                    )
-                                }
+                            FilledTonalIconButton(
+                                onClick = { showFolderDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = "Manage local folders",
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                             IconButton(onClick = { viewModel.setSearchActive(true) }) {
@@ -715,6 +695,68 @@ fun HomeScreen(
     }
 
     // 1. Remove Dialog (2 options: Remove from Library vs Delete from Device)
+    // Manage root folders (same as Settings > Manage Local Folders)
+    if (showFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showFolderDialog = false },
+            title = { Text("Configured Root Folders") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (appSettings.rootFolderUris.isEmpty()) {
+                        Text(
+                            text = "No root folders configured yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        appSettings.rootFolderUris.forEach { folderUri ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = Uri.decode(folderUri).substringAfterLast(':').ifEmpty { folderUri },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { settingsViewModel.removeRootFolder(folderUri) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add New Folder")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderDialog = false }) { Text("Done") }
+            }
+        )
+    }
     if (showRemoveDialog) {
         val count = selectedAlbums.size
         AlertDialog(
