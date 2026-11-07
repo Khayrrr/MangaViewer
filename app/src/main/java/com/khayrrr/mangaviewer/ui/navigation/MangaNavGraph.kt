@@ -1,5 +1,11 @@
 package com.khayrrr.mangaviewer.ui.navigation
 
+import android.os.Build
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import com.khayrrr.mangaviewer.ui.about.AboutScreen
 import com.khayrrr.mangaviewer.ui.removed.RemovedAlbumsScreen
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
@@ -26,28 +32,46 @@ fun MangaNavGraph(
         navController = navController,
         startDestination = startDestination,
         enterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(300)
-            )
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideInHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            } else {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(300)
+                )
+            }
         },
         exitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(300)
-            )
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
+                    fadeOut(animationSpec = tween(300))
+            } else {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(300)
+                )
+            }
         },
         popEnterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(300)
-            )
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideInHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
+                    fadeIn(animationSpec = tween(300))
+            } else {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(300)
+                )
+            }
         },
         popExitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(300)
-            )
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            } else {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(300)
+                )
+            }
         }
     ) {
         composable(Screen.Home.route) {
@@ -66,7 +90,8 @@ fun MangaNavGraph(
             val settingsViewModel: SettingsViewModel = koinViewModel()
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAbout = { navController.navigate(Screen.About.route) }
             )
         }
 
@@ -111,6 +136,11 @@ fun MangaNavGraph(
 
                 composable(Screen.RemovedAlbums.route) {
             RemovedAlbumsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+                composable(Screen.About.route) {
+            AboutScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

@@ -1,5 +1,28 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import com.khayrrr.mangaviewer.ui.settings.SettingsViewModel
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.SelectAll
+import com.khayrrr.mangaviewer.util.PdfShare
+import com.khayrrr.mangaviewer.util.isPdf
+import com.khayrrr.mangaviewer.util.pdfThumbOrSelf
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -116,7 +139,7 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import androidx.compose.material.icons.filled.RestoreFromTrash
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel(),
@@ -127,6 +150,11 @@ fun HomeScreen(
     onOpenReader: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val statusBarTop = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    val settingsViewModel: SettingsViewModel = koinViewModel()
+    val appSettings by settingsViewModel.settings.collectAsState()
+    var showFolderDialog by remember { mutableStateOf(false) }
+    val allTags by viewModel.allTags.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -142,7 +170,6 @@ fun HomeScreen(
     var contextMenuExpanded by remember { mutableStateOf(false) }
     var showViewStyleDialog by remember { mutableStateOf(false) }
     var showSortByDialog by remember { mutableStateOf(false) }
-    var showOrderDialog by remember { mutableStateOf(false) }
 
     // Action dialog states
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -159,6 +186,10 @@ fun HomeScreen(
         viewModel.getSelectedAlbums()
     }
     val singleSelectedAlbum = selectedAlbums.firstOrNull()
+    val isSingle = singleSelectedAlbum != null && uiState.selectedAlbumUris.size == 1
+    val allSelectedArePdf = selectedAlbums.isNotEmpty() && selectedAlbums.all { it.isPdf }
+    val pdfCountInSelection = selectedAlbums.count { it.isPdf }
+    val allSelectedPinned = selectedAlbums.isNotEmpty() && selectedAlbums.all { it.isPinned }
         // Back closes search first-level UI; selection takes priority (registered last)
     BackHandler(enabled = uiState.isSearchActive) {
         viewModel.setSearchActive(false)
@@ -169,10 +200,33 @@ fun HomeScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.systemBarsIgnoringVisibility,
         topBar = {
+            val barMode = when {
+                uiState.isSelectionMode -> 0
+                uiState.isSearchActive -> 1
+                else -> 2
+            }
+            AnimatedContent(
+                targetState = barMode,
+                transitionSpec = {
             when {
+                        targetState == 1 ->
+                            (fadeIn(tween(200)) +
+                                expandHorizontally(tween(280), expandFrom = Alignment.End)) togetherWith
+                                fadeOut(tween(100))
+                        initialState == 1 ->
+                            fadeIn(tween(150)) togetherWith
+                                (fadeOut(tween(200)) +
+                                    shrinkHorizontally(tween(260), shrinkTowards = Alignment.End))
+                        else -> EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
+                label = "topbar"
+            ) { mode ->
+            when (mode) {
                 // Contextual Action Bar Overlay in Selection Mode
-                uiState.isSelectionMode -> {
+                0 -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shadowElevation = 4.dp,
@@ -180,7 +234,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .statusBarsPadding()
+                                .padding(top = statusBarTop)
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -200,26 +254,35 @@ fun HomeScreen(
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // Actions for ONE album selected
-                            if (uiState.selectedAlbumUris.size == 1 && singleSelectedAlbum != null) {
-                                // Remove
-                                IconButton(onClick = { showRemoveDialog = true }) {
+                            // Select all (shown when several albums are selected)
+                            if (!isSingle) {
+                                IconButton(onClick = { viewModel.selectAll() }) {
                                     Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remove album"
+                                        imageVector = Icons.Default.SelectAll,
+                                        contentDescription = "Select all"
                                     )
                                 }
+                            }
 
-                                // Pin / Unpin
-                                IconButton(onClick = { viewModel.togglePinSelectedAlbum() }) {
-                                    Icon(
-                                        imageVector = if (singleSelectedAlbum.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                                        contentDescription = "Pin / Unpin",
-                                        tint = if (singleSelectedAlbum.isPinned) Color(0xFFFFD54F) else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                            // Remove
+                            IconButton(onClick = { showRemoveDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Remove"
+                                )
+                            }
 
-                                // Rename
+                            // Pin / Unpin (applies to every selected album)
+                            IconButton(onClick = { viewModel.togglePinSelectedAlbum() }) {
+                                Icon(
+                                    imageVector = if (allSelectedPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                                    contentDescription = "Pin / Unpin",
+                                    tint = if (allSelectedPinned) Color(0xFFFFD54F) else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Rename (one album only)
+                            if (isSingle && singleSelectedAlbum != null) {
                                 IconButton(onClick = {
                                     if (isLibraryRoot(singleSelectedAlbum.uri)) {
                                         showRootRenameInfo = true
@@ -233,28 +296,39 @@ fun HomeScreen(
                                         contentDescription = "Rename album"
                                     )
                                 }
+                            }
 
-                                // Share
-                                IconButton(onClick = { showShareDialog = true }) {
+                            // Share
+                            IconButton(onClick = { showShareDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Share"
+                                )
+                            }
+
+                            // More overflow menu
+                            Box {
+                                IconButton(onClick = { contextMenuExpanded = true }) {
                                     Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Share album"
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More actions"
                                     )
                                 }
 
-                                // More overflow menu (Change cover, Edit tags, Hide, Details)
-                                Box {
-                                    IconButton(onClick = { contextMenuExpanded = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.MoreVert,
-                                            contentDescription = "More actions"
+                                DropdownMenu(
+                                    expanded = contextMenuExpanded,
+                                    onDismissRequest = { contextMenuExpanded = false }
+                                ) {
+                                    if (isSingle) {
+                                        DropdownMenuItem(
+                                            text = { Text("Select all") },
+                                            leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
+                                            onClick = {
+                                                contextMenuExpanded = false
+                                                viewModel.selectAll()
+                                            }
                                         )
-                                    }
 
-                                    DropdownMenu(
-                                        expanded = contextMenuExpanded,
-                                        onDismissRequest = { contextMenuExpanded = false }
-                                    ) {
                                         DropdownMenuItem(
                                             text = { Text("Change cover image") },
                                             leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) },
@@ -272,16 +346,18 @@ fun HomeScreen(
                                                 showEditTagsDialog = true
                                             }
                                         )
+                                    }
 
-                                        DropdownMenuItem(
-                                            text = { Text("Hide album") },
-                                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
-                                            onClick = {
-                                                contextMenuExpanded = false
-                                                viewModel.hideSelectedAlbum()
-                                            }
-                                        )
+                                    DropdownMenuItem(
+                                        text = { Text(if (isSingle) "Hide album" else "Hide albums") },
+                                        leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                                        onClick = {
+                                            contextMenuExpanded = false
+                                            viewModel.hideSelectedAlbum()
+                                        }
+                                    )
 
+                                    if (isSingle) {
                                         DropdownMenuItem(
                                             text = { Text("Details") },
                                             leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
@@ -292,70 +368,105 @@ fun HomeScreen(
                                         )
                                     }
                                 }
-                            } else {
-                                // Actions for MULTIPLE albums selected: only Remove and Share
-                                IconButton(onClick = { showRemoveDialog = true }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remove albums"
-                                    )
-                                }
-
-                                IconButton(onClick = { showShareDialog = true }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Share albums"
-                                    )
-                                }
                             }
                         }
                     }
                 }
 
                 // Expanded Search Bar
-                uiState.isSearchActive -> {
+                1 -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 4.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
-                                .statusBarsPadding()
+                                .padding(top = statusBarTop)
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            IconButton(onClick = {
-                                viewModel.setSearchActive(false)
-                                focusManager.clearFocus()
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowBack,
-                                    contentDescription = "Close Search"
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = {
+                                    viewModel.setSearchActive(false)
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowBack,
+                                        contentDescription = "Close Search"
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = uiState.searchQuery,
+                                    onValueChange = { viewModel.onSearchQueryChange(it) },
+                                    placeholder = { Text("Search titles & tags, + for tag filter") },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                                    modifier = Modifier.weight(1f)
                                 )
+
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear text"
+                                        )
+                                    }
+                                }
+
+                                // Add the typed text as a tag filter
+                                IconButton(
+                                    enabled = uiState.searchQuery.isNotBlank(),
+                                    onClick = { viewModel.addTagFilter(uiState.searchQuery) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add tag filter"
+                                    )
+                                }
                             }
 
-                            OutlinedTextField(
-                                value = uiState.searchQuery,
-                                onValueChange = { viewModel.onSearchQueryChange(it) },
-                                placeholder = { Text("Search titles and tags…") },
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent
-                                ),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            if (uiState.searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear text"
-                                    )
+                            if (uiState.tagFilters.isNotEmpty()) {
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
+                                ) {
+                                    uiState.tagFilters.forEach { tag ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = tag,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Remove tag filter",
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .clickable { viewModel.removeTagFilter(tag) }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -373,6 +484,18 @@ fun HomeScreen(
                             )
                         },
                         actions = {
+                            FilledTonalIconButton(
+                                onClick = { showFolderDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = "Manage local folders",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                             IconButton(onClick = { viewModel.setSearchActive(true) }) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
@@ -406,21 +529,6 @@ fun HomeScreen(
                                     onClick = {
                                         menuExpanded = false
                                         showSortByDialog = true
-                                    }
-                                )
-
-                                val isAlphabetical = uiState.sortBy == AlbumSortBy.ALPHABETICAL
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Order",
-                                            color = if (isAlphabetical) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        )
-                                    },
-                                    enabled = isAlphabetical,
-                                    onClick = {
-                                        menuExpanded = false
-                                        showOrderDialog = true
                                     }
                                 )
 
@@ -474,12 +582,14 @@ fun HomeScreen(
                                 )
                             }
                         },
+                        windowInsets = WindowInsets.systemBarsIgnoringVisibility
+                            .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surface
                         )
                     )
                 }
-            }
+            }}
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
@@ -500,7 +610,10 @@ fun HomeScreen(
 
                 uiState.albums.isEmpty() && !uiState.isScanning -> {
                     EmptyAlbumsPrompt(
-                        searchQuery = uiState.searchQuery,
+                        searchQuery = if (uiState.searchQuery.isBlank() && uiState.tagFilters.isNotEmpty())
+                            uiState.tagFilters.joinToString(", ")
+                        else
+                            uiState.searchQuery,
                         onAddFolder = { folderPickerLauncher.launch(null) }
                     )
                 }
@@ -582,6 +695,68 @@ fun HomeScreen(
     }
 
     // 1. Remove Dialog (2 options: Remove from Library vs Delete from Device)
+    // Manage root folders (same as Settings > Manage Local Folders)
+    if (showFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showFolderDialog = false },
+            title = { Text("Configured Root Folders") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (appSettings.rootFolderUris.isEmpty()) {
+                        Text(
+                            text = "No root folders configured yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        appSettings.rootFolderUris.forEach { folderUri ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = Uri.decode(folderUri).substringAfterLast(':').ifEmpty { folderUri },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { settingsViewModel.removeRootFolder(folderUri) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add New Folder")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderDialog = false }) { Text("Done") }
+            }
+        )
+    }
     if (showRemoveDialog) {
         val count = selectedAlbums.size
         AlertDialog(
@@ -676,6 +851,7 @@ fun HomeScreen(
                     value = renameInput,
                     onValueChange = { renameInput = it },
                     label = { Text("Folder Name") },
+                    suffix = { if (singleSelectedAlbum.isPdf) Text(".pdf") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -716,45 +892,86 @@ fun HomeScreen(
         )
     }
     if (showShareDialog && selectedAlbums.isNotEmpty()) {
+        val imageAlbums = selectedAlbums.filter { !it.isPdf }
         AlertDialog(
             onDismissRequest = { showShareDialog = false },
-            title = { Text("Share Album") },
+            title = {
+                Text(
+                    when {
+                        allSelectedArePdf && selectedAlbums.size == 1 -> "Share PDF"
+                        allSelectedArePdf -> "Share PDFs"
+                        else -> "Share Album"
+                    }
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            showShareDialog = false
-                            coroutineScope.launch {
-                                val allImages = mutableListOf<Uri>()
-                                selectedAlbums.forEach { album ->
-                                    val images = viewModel.getImagesForAlbum(album.uri)
-                                    allImages.addAll(images.map { Uri.parse(it.uri) })
-                                }
-                                ShareHelper.shareImages(context, allImages, "Share Images")
+                    if (allSelectedArePdf) {
+                        Button(
+                            onClick = {
+                                showShareDialog = false
+                                PdfShare.sharePdfs(context, selectedAlbums.map { Uri.parse(it.uri) })
                                 viewModel.clearSelection()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Share as Images")
-                    }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (selectedAlbums.size == 1) "Share PDF" else "Share ${selectedAlbums.size} PDFs")
+                        }
 
-                    OutlinedButton(
-                        onClick = {
-                            showShareDialog = false
-                            coroutineScope.launch {
-                                val map = mutableMapOf<Album, List<ImageItem>>()
-                                selectedAlbums.forEach { album ->
-                                    map[album] = viewModel.getImagesForAlbum(album.uri)
-                                }
-                                val baseName = if (selectedAlbums.size == 1) selectedAlbums.first().name else "manga_export"
-                                ShareHelper.shareAlbumsAsZip(context, map, baseName)
-                                viewModel.clearSelection()
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Share as images")
+                                Text("Not implemented", style = MaterialTheme.typography.labelSmall)
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Share as ZIP")
+                        }
+                    } else {
+                        if (pdfCountInSelection > 0) {
+                            Text(
+                                text = "$pdfCountInSelection PDF ${if (pdfCountInSelection == 1) "album is" else "albums are"} not included. Select PDFs on their own to share them.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                showShareDialog = false
+                                coroutineScope.launch {
+                                    val allImages = mutableListOf<Uri>()
+                                    imageAlbums.forEach { album ->
+                                        val images = viewModel.getImagesForAlbum(album.uri)
+                                        allImages.addAll(images.map { Uri.parse(it.uri) })
+                                    }
+                                    ShareHelper.shareImages(context, allImages, "Share Images")
+                                    viewModel.clearSelection()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share as Images")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                showShareDialog = false
+                                coroutineScope.launch {
+                                    val map = mutableMapOf<Album, List<ImageItem>>()
+                                    imageAlbums.forEach { album ->
+                                        map[album] = viewModel.getImagesForAlbum(album.uri)
+                                    }
+                                    val baseName = if (imageAlbums.size == 1) imageAlbums.first().name else "manga_export"
+                                    ShareHelper.shareAlbumsAsZip(context, map, baseName)
+                                    viewModel.clearSelection()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Share as ZIP")
+                        }
                     }
                 }
             },
@@ -776,7 +993,10 @@ fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     DetailRow("Name", singleSelectedAlbum.name)
                     DetailRow("Full Path", singleSelectedAlbum.path)
-                    DetailRow("Total Images", "${singleSelectedAlbum.totalImages} pages")
+                    DetailRow(
+                        if (singleSelectedAlbum.isPdf) "PDF Pages" else "Total Images",
+                        "${singleSelectedAlbum.totalImages} pages"
+                    )
                     DetailRow("Size", Formatter.formatFileSize(context, singleSelectedAlbum.totalSize))
                     DetailRow(
                         "Date Modified",
@@ -832,6 +1052,46 @@ fun HomeScreen(
                             }
                         ) {
                             Text("Add")
+                        }
+                    }
+
+                    val typedTag = newTagInput.trim()
+                    if (typedTag.length >= 2) {
+                        val q = typedTag.lowercase()
+                        val suggestions = allTags
+                            .filter {
+                                !currentTags.contains(it) &&
+                                    !it.equals(typedTag, ignoreCase = true) &&
+                                    it.lowercase().contains(q)
+                            }
+                            .sortedBy { if (it.lowercase().startsWith(q)) 0 else 1 }
+                            .take(6)
+
+                        if (suggestions.isNotEmpty()) {
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                suggestions.forEach { suggestion ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        onClick = {
+                                            currentTags.add(suggestion)
+                                            newTagInput = ""
+                                        }
+                                    ) {
+                                        Text(
+                                            text = suggestion,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -934,12 +1194,12 @@ fun HomeScreen(
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .clickable {
-                                            viewModel.setCustomCover(singleSelectedAlbum.uri, image.uri)
+                                            viewModel.setCustomCover(singleSelectedAlbum.uri, pdfThumbOrSelf(image.uri))
                                             showChangeCoverDialog = false
                                         }
                                 ) {
                                     AsyncImage(
-                                        model = image.uri,
+                                        model = pdfThumbOrSelf(image.uri),
                                         contentDescription = image.name,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -1001,31 +1261,33 @@ fun HomeScreen(
 
     // Sort By Dialog
     if (showSortByDialog) {
+        val options = listOf(
+            Triple("Name (A to Z)", AlbumSortBy.ALPHABETICAL, SortOrder.ASCENDING),
+            Triple("Name (Z to A)", AlbumSortBy.ALPHABETICAL, SortOrder.DESCENDING),
+            Triple("Last modified", AlbumSortBy.LAST_MODIFIED, null),
+            Triple("Oldest", AlbumSortBy.OLDEST, null)
+        )
         AlertDialog(
             onDismissRequest = { showSortByDialog = false },
             title = { Text("Sort By") },
             text = {
                 Column {
-                    listOf(
-                        AlbumSortBy.ALPHABETICAL to "Alphabetical",
-                        AlbumSortBy.LAST_MODIFIED to "Last modified",
-                        AlbumSortBy.OLDEST to "Oldest"
-                    ).forEach { (sort, label) ->
+                    options.forEach { (label, sort, order) ->
+                        val selected = uiState.sortBy == sort &&
+                            (order == null || uiState.sortOrder == order)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = uiState.sortBy == sort,
-                                onClick = {
-                                    viewModel.setSortBy(sort)
+                                .clickable {
+                                    viewModel.setSort(sort, order)
                                     showSortByDialog = false
                                 }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(modifier = Modifier.width(16.dp))
                             Text(label, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
@@ -1033,45 +1295,6 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showSortByDialog = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-
-    // Order Dialog (Ascending / Descending)
-    if (showOrderDialog) {
-        AlertDialog(
-            onDismissRequest = { showOrderDialog = false },
-            title = { Text("Sort Order") },
-            text = {
-                Column {
-                    listOf(
-                        SortOrder.ASCENDING to "Ascending (A to Z)",
-                        SortOrder.DESCENDING to "Descending (Z to A)"
-                    ).forEach { (order, label) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .padding(vertical = 4.dp)
-                        ) {
-                            RadioButton(
-                                selected = uiState.sortOrder == order,
-                                onClick = {
-                                    viewModel.setSortOrder(order)
-                                    showOrderDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showOrderDialog = false }) {
                     Text("Close")
                 }
             }

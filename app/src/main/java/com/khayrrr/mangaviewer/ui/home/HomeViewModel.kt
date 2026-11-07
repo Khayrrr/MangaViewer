@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import kotlinx.coroutines.flow.map
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,14 +32,16 @@ data class HomeUiState(
     val isScanning: Boolean = false,
     val hasRootFolders: Boolean = false,
     val selectedAlbumUris: Set<String> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
+    val tagFilters: List<String> = emptyList()
 )
 
 private data class HomeExtras(
     val query: String,
     val searchActive: Boolean,
     val selectedUris: Set<String>,
-    val isScanning: Boolean
+    val isScanning: Boolean,
+    val tagFilters: List<String>
 )
 
 class HomeViewModel(
@@ -54,13 +57,16 @@ class HomeViewModel(
 
     private val _selectedAlbumUris = MutableStateFlow<Set<String>>(emptySet())
 
+    private val _tagFilters = MutableStateFlow<List<String>>(emptyList())
+
     private val extrasFlow = combine(
         _searchQuery,
         _isSearchActive,
         _selectedAlbumUris,
-        mangaRepository.isScanning
-    ) { query, searchActive, selectedUris, isScanning ->
-        HomeExtras(query, searchActive, selectedUris, isScanning)
+        mangaRepository.isScanning,
+        _tagFilters
+    ) { query, searchActive, selectedUris, isScanning, tagFilters ->
+        HomeExtras(query, searchActive, selectedUris, isScanning, tagFilters)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -72,9 +78,19 @@ class HomeViewModel(
         val searchActive = extras.searchActive
         val selectedUris = extras.selectedUris
         val isScanning = extras.isScanning
+        val tagFilters = extras.tagFilters
 
         // Filter visible non-hidden albums
-        val visibleAlbums = albums.filter { !it.isHidden && !it.isRemoved }
+        val visibleBase = albums.filter { !it.isHidden && !it.isRemoved }
+
+        // Tag filters: an album must have every selected tag
+        val visibleAlbums = if (tagFilters.isEmpty()) {
+            visibleBase
+        } else {
+            visibleBase.filter { album ->
+                tagFilters.all { filter -> album.tags.any { it.lowercase().contains(filter) } }
+            }
+        }
 
         // Filter by search query (name AND tags)
         val filteredAlbums = if (query.isBlank()) {
@@ -105,13 +121,30 @@ class HomeViewModel(
             isScanning = isScanning,
             hasRootFolders = settings.rootFolderUris.isNotEmpty(),
             selectedAlbumUris = selectedUris,
-            isSelectionMode = selectedUris.isNotEmpty()
+            isSelectionMode = selectedUris.isNotEmpty(),
+            tagFilters = tagFilters
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HomeUiState()
     )
+
+    /** Every tag used on any album, most used first. */
+    val allTags: StateFlow<List<String>> = mangaRepository.albumsFlow
+        .map { albums ->
+            albums.flatMap { it.tags }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .map { it.key }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     private fun createAlbumComparator(sortBy: AlbumSortBy, sortOrder: SortOrder): Comparator<Album> {
         return Comparator { a, b ->
@@ -143,13 +176,27 @@ class HomeViewModel(
         _isSearchActive.value = active
         if (!active) {
             _searchQuery.value = ""
+            _tagFilters.value = emptyList()
         }
+    }
+
+    fun addTagFilter(raw: String) {
+        val tag = raw.trim().lowercase()
+        if (tag.isEmpty()) return
+        if (!_tagFilters.value.contains(tag)) {
+            _tagFilters.value = _tagFilters.value + tag
+        }
+        _searchQuery.value = ""
+    }
+
+    fun removeTagFilter(tag: String) {
+        _tagFilters.value = _tagFilters.value - tag
     }
 
     fun setViewStyle(style: AlbumViewStyle) {
         viewModelScope.launch {
             settingsRepository.setViewStyle(style)
-        }
+                    }
     }
 
     fun setSortBy(sortBy: AlbumSortBy) {
@@ -161,6 +208,13 @@ class HomeViewModel(
     fun setSortOrder(order: SortOrder) {
         viewModelScope.launch {
             settingsRepository.setSortOrder(order)
+        }
+    }
+
+    fun setSort(sortBy: AlbumSortBy, order: SortOrder?) {
+        viewModelScope.launch {
+            settingsRepository.setSortBy(sortBy)
+            if (order != null) settingsRepository.setSortOrder(order)
         }
     }
 
@@ -195,6 +249,10 @@ class HomeViewModel(
         _selectedAlbumUris.value = emptySet()
     }
 
+    fun selectAll() {
+        _selectedAlbumUris.value = uiState.value.albums.map { it.uri }.toSet()
+    }
+
     fun getSelectedAlbums(): List<Album> {
         val selectedSet = _selectedAlbumUris.value
         return uiState.value.albums.filter { selectedSet.contains(it.uri) }
@@ -215,9 +273,12 @@ class HomeViewModel(
     }
 
     fun togglePinSelectedAlbum() {
-        val album = getSelectedAlbums().firstOrNull() ?: return
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
+        // If everything is already pinned, unpin; otherwise pin all
+        val pin = !selected.all { it.isPinned }
         viewModelScope.launch {
-            mangaRepository.setPinned(album.uri, !album.isPinned)
+            selected.forEach { mangaRepository.setPinned(it.uri, pin) }
             clearSelection()
         }
     }
@@ -231,9 +292,10 @@ class HomeViewModel(
     }
 
     fun hideSelectedAlbum() {
-        val album = getSelectedAlbums().firstOrNull() ?: return
+        val selected = getSelectedAlbums()
+        if (selected.isEmpty()) return
         viewModelScope.launch {
-            mangaRepository.setHidden(album.uri, true)
+            selected.forEach { mangaRepository.setHidden(it.uri, true) }
             clearSelection()
         }
     }

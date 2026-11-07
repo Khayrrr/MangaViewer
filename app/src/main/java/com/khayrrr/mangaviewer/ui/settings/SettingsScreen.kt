@@ -1,5 +1,7 @@
 package com.khayrrr.mangaviewer.ui.settings
 
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.filled.ChevronRight
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -83,7 +85,8 @@ import com.khayrrr.mangaviewer.ui.theme.SeedViolet
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToAbout: () -> Unit
 ) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
@@ -343,8 +346,10 @@ fun SettingsScreen(
                 SettingsSwitchRow(
                     title = "Landscape Double-Page",
                     subtitle = "Side-by-side spread in landscape orientation",
-                    checked = settings.landscapeDoublePage,
-                    onCheckedChange = { viewModel.setLandscapeDoublePage(it) }
+                    checked = false,
+                    onCheckedChange = {},
+                    enabled = false,
+                    note = "Not implemented"
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -466,35 +471,32 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // About Info
+                // About
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onNavigateToAbout() }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Manga Reader",
+                            text = "About",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Version ${BuildConfig.VERSION_NAME} • Fully Offline & Open Source",
+                            text = "MangaViewer ${BuildConfig.VERSION_NAME} • Fully Offline & Open Source",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = {
-                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Khayrrr"))
-                        context.startActivity(browserIntent)
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Favorite,
-                            contentDescription = "Developer GitHub",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -622,13 +624,16 @@ private fun SettingsSwitchRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    note: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -652,10 +657,19 @@ private fun SettingsSwitchRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (note != null) {
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
         )
     }
 }

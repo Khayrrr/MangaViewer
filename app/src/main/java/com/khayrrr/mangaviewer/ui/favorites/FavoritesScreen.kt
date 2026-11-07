@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.favorites
 
+import com.khayrrr.mangaviewer.util.pdfThumbOrSelf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -126,7 +127,7 @@ fun FavoritesScreen(
                             }
                     ) {
                         AsyncImage(
-                            model = item.imageUri,
+                            model = pdfThumbOrSelf(item.imageUri),
                             contentDescription = item.imageName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

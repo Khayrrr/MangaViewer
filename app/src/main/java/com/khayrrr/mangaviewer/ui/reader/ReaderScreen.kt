@@ -1,5 +1,27 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate as animateValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlinx.coroutines.Job
+import kotlin.math.abs
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -64,6 +86,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -268,6 +291,7 @@ private fun ReaderBody(
     viewModel: ReaderViewModel
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val isVertical = settings.readingDirection == ReadingDirection.VERTICAL
     val rtl = settings.readingDirection == ReadingDirection.RTL
 
@@ -293,6 +317,22 @@ private fun ReaderBody(
         viewModel.onPageChanged(currentPage)
         onPageChanged(currentPage)
     }
+
+    val showBackToTop by remember(images, isVertical) {
+        derivedStateOf {
+            images.size > 1 && if (isVertical) {
+                listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 40
+            } else {
+                pagerState.currentPage > 0
+            }
+        }
+    }
+
+    val overlayProgress by animateFloatAsState(
+        targetValue = if (uiVisible) 1f else 0f,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "overlay"
+    )
 
     // Seekbar (vertical mode): jump to the dragged page
     var seekTarget by remember { mutableIntStateOf(-1) }
@@ -357,21 +397,61 @@ private fun ReaderBody(
             }
         }
 
-        if (uiVisible) {
-            // Back button (top left)
-            IconButton(
+                // End of the album: button to jump back to the first page
+        AnimatedVisibility(
+            visible = showBackToTop,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = if (isVertical && uiVisible) 96.dp else 56.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.55f)
+            ) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            if (isVertical) listState.animateScrollToItem(0) else pagerState.animateScrollToPage(0)
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Back to first page",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+
+        if (overlayProgress > 0f) {
+            // Back button (top left): same size and adaptive colours as the toolbar
+            Surface(
                 onClick = onNavigateBack,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    .graphicsLayer {
+                        translationY = -(1f - overlayProgress) * size.height
+                        alpha = overlayProgress
+                    }
                     .statusBarsPadding()
                     .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .size(48.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             // Floating pill toolbar (top right)
@@ -382,11 +462,15 @@ private fun ReaderBody(
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .graphicsLayer {
+                        translationY = -(1f - overlayProgress) * size.height
+                        alpha = overlayProgress
+                    }
                     .statusBarsPadding()
                     .padding(16.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier.height(48.dp).padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val currentImage = images[currentPage]
@@ -395,13 +479,13 @@ private fun ReaderBody(
 
                     IconButton(
                         onClick = { viewModel.toggleFavorite(currentImage) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = "Favorite",
                             tint = LocalContentColor.current,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
@@ -409,18 +493,19 @@ private fun ReaderBody(
                     Box {
                         IconButton(
                             onClick = { menuExpanded = true },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(44.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More",
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
                         DropdownMenu(
                             expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
+                            onDismissRequest = { menuExpanded = false },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f)
                         ) {
                             if (!isPdfPage) {
                             DropdownMenuItem(
@@ -517,6 +602,10 @@ private fun ReaderBody(
                     onSeek = { seekTarget = it },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .graphicsLayer {
+                            translationY = (1f - overlayProgress) * size.height
+                            alpha = overlayProgress
+                        }
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 16.dp)
                 )
@@ -626,6 +715,7 @@ private fun ReaderBody(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun SeekBar(
     currentPage: Int,
     total: Int,
@@ -657,27 +747,64 @@ private fun SeekBar(
             shape = PillShape,
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
             contentColor = MaterialTheme.colorScheme.onSurface,
-            shadowElevation = 8.dp
+            shadowElevation = 6.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "${shownPage + 1}", style = MaterialTheme.typography.labelMedium)
-                Slider(
-                    value = value,
-                    onValueChange = {
-                        dragging = true
-                        dragValue = it
-                        onSeek(it.roundToInt())
-                    },
-                    onValueChangeFinished = { dragging = false },
-                    valueRange = 0f..(total - 1).toFloat(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-                Text(text = "$total", style = MaterialTheme.typography.labelMedium)
+                Text(text = "${shownPage + 1}", style = MaterialTheme.typography.labelSmall)
+
+                val active = MaterialTheme.colorScheme.onSurface
+                val inactive = active.copy(alpha = 0.3f)
+
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+                    Slider(
+                        value = value,
+                        onValueChange = {
+                            dragging = true
+                            dragValue = it
+                            onSeek(it.roundToInt())
+                        },
+                        onValueChangeFinished = { dragging = false },
+                        valueRange = 0f..(total - 1).toFloat(),
+                        thumb = {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(22.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(active)
+                            )
+                        },
+                        track = { sliderState ->
+                            val range = sliderState.valueRange
+                            val span = range.endInclusive - range.start
+                            val fraction = if (span > 0f) {
+                                ((sliderState.value - range.start) / span).coerceIn(0f, 1f)
+                            } else 0f
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(inactive)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .fillMaxHeight()
+                                        .background(active)
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
+                    )
+                }
+
+                Text(text = "$total", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -704,7 +831,7 @@ private fun PageImage(
     )
 }
 
-/** Vertical continuous reading column with pinch / double-tap zoom. */
+/** Vertical continuous reading column with pinch / double-tap zoom and flick momentum. */
 @Composable
 private fun VerticalPages(
     images: List<ImageItem>,
@@ -717,22 +844,40 @@ private fun VerticalPages(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
-    var boxWidth by remember { mutableFloatStateOf(0f) }
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
     val toggleUi by rememberUpdatedState(onToggleUi)
+    val scope = rememberCoroutineScope()
+    val flingJobs = remember { mutableListOf<Job>() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged { boxWidth = it.width.toFloat() }
+            .onSizeChanged { boxSize = it }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { toggleUi() },
-                    onDoubleTap = {
-                        if (scale > 1f) {
-                            scale = 1f
-                            offsetX = 0f
-                        } else {
-                            scale = 2f
+                    onDoubleTap = { tap ->
+                        flingJobs.forEach { it.cancel() }
+                        flingJobs.clear()
+                        val startScale = scale
+                        val startOffset = offsetX
+                        val targetScale = if (startScale > 1f) 1f else 2f
+                        val qx = tap.x - boxSize.width / 2f
+                        val qy = tap.y - boxSize.height / 2f
+                        flingJobs += scope.launch {
+                            var prevScale = startScale
+                            animateValue(
+                                0f, 1f,
+                                animationSpec = tween(260, easing = FastOutSlowInEasing)
+                            ) { t, _ ->
+                                val s = startScale + (targetScale - startScale) * t
+                                val maxX = (s - 1f) * boxSize.width / 2f
+                                offsetX = (qx - (s / startScale) * (qx - startOffset)).coerceIn(-maxX, maxX)
+                                // Keep the tapped spot under the finger while scaling
+                                listState.dispatchRawDelta(qy / prevScale - qy / s)
+                                prevScale = s
+                                scale = s
+                            }
                         }
                     }
                 )
@@ -740,30 +885,89 @@ private fun VerticalPages(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    flingJobs.forEach { it.cancel() }
+                    flingJobs.clear()
+                    val tracker = VelocityTracker()
+                    var handled = false
+                    var pastSlop = false
+                    var slopPan = Offset.Zero
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (pressedCount > 1 || scale > 1f) {
                             val zoom = event.calculateZoom()
-                            val pan = event.calculatePan()
+                            var pan = event.calculatePan()
+                            if (!pastSlop) {
+                                if (pressedCount > 1) {
+                                    pastSlop = true
+                                } else {
+                                    slopPan += pan
+                                    if (slopPan.getDistance() > viewConfiguration.touchSlop) {
+                                        pastSlop = true
+                                        pan = slopPan
+                                    } else {
+                                        pan = Offset.Zero
+                                    }
+                                }
+                            }
+                            if (!pastSlop) continue
+                            handled = true
                             val centroid = event.calculateCentroid(useCurrent = true)
                             val oldScale = scale
                             val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
                             var newOffset = offsetX
                             if (centroid.isSpecified && oldScale > 0f) {
-                                val q = centroid.x - boxWidth / 2f
-                                newOffset = q - (newScale / oldScale) * (q - newOffset)
+                                val qx = centroid.x - boxSize.width / 2f
+                                newOffset = qx - (newScale / oldScale) * (qx - newOffset)
+                                if (newScale != oldScale) {
+                                    val qy = centroid.y - boxSize.height / 2f
+                                    listState.dispatchRawDelta(qy / oldScale - qy / newScale)
+                                }
                             }
                             newOffset += pan.x
-                            val maxOffset = (newScale - 1f) * boxWidth / 2f
+                            val maxOffset = (newScale - 1f) * boxSize.width / 2f
                             offsetX = newOffset.coerceIn(-maxOffset, maxOffset)
                             scale = newScale
                             if (newScale > 1f && pan.y != 0f) {
                                 listState.dispatchRawDelta(-pan.y / newScale)
                             }
+                            if (pressedCount == 1) {
+                                event.changes.firstOrNull { it.pressed }?.let {
+                                    tracker.addPosition(it.uptimeMillis, it.position)
+                                }
+                            } else {
+                                tracker.resetTracking()
+                            }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
+
+                    if (handled && scale > 1f) {
+                        val velocity = tracker.calculateVelocity()
+                        if (abs(velocity.x) > 200f) {
+                            flingJobs += scope.launch {
+                                var last = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = velocity.x)
+                                    .animateDecay(exponentialDecay()) {
+                                        val d = value - last
+                                        last = value
+                                        val max = (scale - 1f) * boxSize.width / 2f
+                                        offsetX = (offsetX + d).coerceIn(-max, max)
+                                    }
+                            }
+                        }
+                        if (abs(velocity.y) > 200f) {
+                            flingJobs += scope.launch {
+                                var last = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = velocity.y)
+                                    .animateDecay(exponentialDecay()) {
+                                        val d = value - last
+                                        last = value
+                                        listState.dispatchRawDelta(-d / scale)
+                                    }
+                            }
+                        }
+                    }
                 }
             }
     ) {
@@ -820,6 +1024,7 @@ private fun HorizontalPages(
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     val toggleUi by rememberUpdatedState(onToggleUi)
     val scope = rememberCoroutineScope()
+    val flingJobs = remember { mutableListOf<Job>() }
 
     // After a page turn from a zoomed page: settle, then reset zoom for the new page
     val onGestureEnd: () -> Unit = {
@@ -843,14 +1048,28 @@ private fun HorizontalPages(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { toggleUi() },
-                    onDoubleTap = {
-                        if (scale > 1f) {
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        } else {
-                            zoomPage = pagerState.currentPage
-                            scale = 2f
+                    onDoubleTap = { tap ->
+                        flingJobs.forEach { it.cancel() }
+                        flingJobs.clear()
+                        val startScale = scale
+                        val startX = offsetX
+                        val startY = offsetY
+                        val targetScale = if (startScale > 1f) 1f else 2f
+                        if (targetScale > 1f) zoomPage = pagerState.currentPage
+                        val qx = tap.x - boxSize.width / 2f
+                        val qy = tap.y - boxSize.height / 2f
+                        flingJobs += scope.launch {
+                            animateValue(
+                                0f, 1f,
+                                animationSpec = tween(260, easing = FastOutSlowInEasing)
+                            ) { t, _ ->
+                                val s = startScale + (targetScale - startScale) * t
+                                val maxX = (s - 1f) * boxSize.width / 2f
+                                val maxY = (s - 1f) * boxSize.height / 2f
+                                offsetX = (qx - (s / startScale) * (qx - startX)).coerceIn(-maxX, maxX)
+                                offsetY = (qy - (s / startScale) * (qy - startY)).coerceIn(-maxY, maxY)
+                                scale = s
+                            }
                         }
                     }
                 )
@@ -858,14 +1077,34 @@ private fun HorizontalPages(
             .pointerInput(rtl) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    flingJobs.forEach { it.cancel() }
+                    flingJobs.clear()
+                    val tracker = VelocityTracker()
                     var handled = false
+                    var pastSlop = false
+                    var slopPan = Offset.Zero
+                    var turned = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (pressedCount > 1 || scale > 1f) {
-                            handled = true
                             val zoom = event.calculateZoom()
-                            val pan = event.calculatePan()
+                            var pan = event.calculatePan()
+                            if (!pastSlop) {
+                                if (pressedCount > 1) {
+                                    pastSlop = true
+                                } else {
+                                    slopPan += pan
+                                    if (slopPan.getDistance() > viewConfiguration.touchSlop) {
+                                        pastSlop = true
+                                        pan = slopPan
+                                    } else {
+                                        pan = Offset.Zero
+                                    }
+                                }
+                            }
+                            if (!pastSlop) continue
+                            handled = true
                             val centroid = event.calculateCentroid(useCurrent = true)
                             val oldScale = scale
                             val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
@@ -892,12 +1131,50 @@ private fun HorizontalPages(
 
                             // One finger pushing past the image edge turns the page
                             if (pressedCount == 1 && newScale > 1f && leftover != 0f) {
+                                turned = true
                                 pagerState.dispatchRawDelta(if (rtl) leftover else -leftover)
+                            }
+                            if (pressedCount == 1) {
+                                event.changes.firstOrNull { it.pressed }?.let {
+                                    tracker.addPosition(it.uptimeMillis, it.position)
+                                }
+                            } else {
+                                tracker.resetTracking()
                             }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
-                    if (handled) onGestureEnd()
+
+                    if (handled) {
+                        onGestureEnd()
+                        if (!turned && scale > 1f) {
+                            val velocity = tracker.calculateVelocity()
+                            if (abs(velocity.x) > 200f) {
+                                flingJobs += scope.launch {
+                                    var last = 0f
+                                    AnimationState(initialValue = 0f, initialVelocity = velocity.x)
+                                        .animateDecay(exponentialDecay()) {
+                                            val d = value - last
+                                            last = value
+                                            val max = (scale - 1f) * boxSize.width / 2f
+                                            offsetX = (offsetX + d).coerceIn(-max, max)
+                                        }
+                                }
+                            }
+                            if (abs(velocity.y) > 200f) {
+                                flingJobs += scope.launch {
+                                    var last = 0f
+                                    AnimationState(initialValue = 0f, initialVelocity = velocity.y)
+                                        .animateDecay(exponentialDecay()) {
+                                            val d = value - last
+                                            last = value
+                                            val max = (scale - 1f) * boxSize.height / 2f
+                                            offsetY = (offsetY + d).coerceIn(-max, max)
+                                        }
+                                }
+                            }
+                        }
+                    }
                 }
             }
     ) {
