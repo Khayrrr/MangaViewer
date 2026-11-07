@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.navigation
 
+import android.os.Build
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -31,18 +32,46 @@ fun MangaNavGraph(
         navController = navController,
         startDestination = startDestination,
         enterTransition = {
-            slideInHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideInHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            } else {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(300)
+                )
+            }
         },
         exitTransition = {
-            slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
-                fadeOut(animationSpec = tween(300))
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
+                    fadeOut(animationSpec = tween(300))
+            } else {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(300)
+                )
+            }
         },
         popEnterTransition = {
-            slideInHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
-                fadeIn(animationSpec = tween(300))
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideInHorizontally(animationSpec = tween(300)) { fullWidth -> -fullWidth / 4 } +
+                    fadeIn(animationSpec = tween(300))
+            } else {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(300)
+                )
+            }
         },
         popExitTransition = {
-            slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            if (Build.VERSION.SDK_INT >= 35) {
+                slideOutHorizontally(animationSpec = tween(300)) { fullWidth -> fullWidth }
+            } else {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(300)
+                )
+            }
         }
     ) {
         composable(Screen.Home.route) {
