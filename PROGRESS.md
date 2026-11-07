@@ -49,19 +49,24 @@ Offline, local manga and image reader app for Android built with Kotlin, Jetpack
     - Fixed alignment parameter type mismatch (`Alignment.CenterHorizontally` for Column) in `AlbumItemComponents.kt`.
 
 ## Current Phase
-Phase 6 complete (merged to main): PDF support. Each PDF file in a root folder is its own album (page 1 as cover), rendered page by page with PdfRenderer through a Coil fetcher (mvpdf:// URIs), so all reader modes, zoom, seekbar, favorites and progress work on PDFs. Page counts are cached; covers are small and cached on disk; reader pages and covers use separate render queues.
+Phase 7 complete, Phase 8 (release 1.0.0) in progress.
+
+Phase 7 polish: app icon, About screen, reader polish (focus-point zoom, flick momentum, animated double-tap, easier zoom-out, back-to-first-page button appearing after a small scroll, thinner seekbar, matching translucent back button / toolbar / menu, slide animations for controls), PDF share ("Share PDF"), multi-select actions (select all, pin, hide), sort list (Name A-Z / Z-A / Last modified / Oldest), multi-tag search, tag suggestions when editing tags, Hidden albums with view styles and selection actions, Android 15+ predictive back (older versions keep slide transitions), stable Home layout when returning from the reader, search bar expand animation, Home folder manager (same dialog as Settings).
+
+Phase 8: signed release build through GitHub Actions on version tags (v*), release APK published on GitHub Releases, README and repository description.
 
 ## Known issues / limits
-- Zoom is centered, no flick momentum when zoomed
-- Horizontal zoom bounds are measured against the whole screen
-- Share-as-images has a size limit on very large albums
+- Landscape double-page is not implemented (setting is disabled with a "Not implemented" note)
+- PDF: wallpaper, share, rename and delete are hidden for PDF pages
+- PDF: "Share as ZIP" and "Share as images" not available for PDF albums
+- PDF: favorites of a PDF page are lost if the PDF file is renamed
+- PDF: password-protected or damaged PDFs are skipped; first scan of many PDFs is slow
 - Albums hidden before Phase 5 need unhide + re-hide to get .nomedia
 - .nomedia also hides sub-albums in gallery apps
-- PDF: wallpaper, share, rename and delete are hidden for PDF pages
-- PDF: "Share as ZIP" does not work on PDF albums
-- PDF: favorites of a PDF page are lost if the PDF file is renamed
-- PDF: password-protected or damaged PDFs are skipped
-- PDF: first scan after adding many PDFs is slow (page counts are cached afterward)
+- Share-as-images has a size limit on very large albums
+- Hidden albums screen shares the view style and sort order with Home
+- Predictive back preview only on Android 15+
+- Release build has code shrinking (R8) off
 
 ## Next step
-Choose from backlog: landscape double-page (skipped for now), zoom polish (focus-point zoom, fling), share/wallpaper for PDF pages, share-as-images limit on big albums.
+Backlog: landscape double-page, share/wallpaper for PDF pages, faster first PDF scan, enable R8 shrinking after testing.
