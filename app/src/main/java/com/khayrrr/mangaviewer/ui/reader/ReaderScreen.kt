@@ -1,5 +1,11 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate as animateValue
@@ -310,6 +316,16 @@ private fun ReaderBody(
         onPageChanged(currentPage)
     }
 
+    val showBackToTop by remember(images, isVertical) {
+        derivedStateOf {
+            images.size > 1 && if (isVertical) {
+                listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 40
+            } else {
+                pagerState.currentPage > 0
+            }
+        }
+    }
+
     // Seekbar (vertical mode): jump to the dragged page
     var seekTarget by remember { mutableIntStateOf(-1) }
     LaunchedEffect(seekTarget) {
@@ -375,7 +391,7 @@ private fun ReaderBody(
 
                 // End of the album: button to jump back to the first page
         AnimatedVisibility(
-            visible = images.size > 1 && currentPage == images.lastIndex,
+            visible = showBackToTop,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
             modifier = Modifier
@@ -404,20 +420,26 @@ private fun ReaderBody(
         }
 
         if (uiVisible) {
-            // Back button (top left)
-            IconButton(
+            // Back button (top left): same size and adaptive colours as the toolbar
+            Surface(
                 onClick = onNavigateBack,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
                     .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .size(48.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             // Floating pill toolbar (top right)
@@ -432,7 +454,7 @@ private fun ReaderBody(
                     .padding(16.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier.height(48.dp).padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val currentImage = images[currentPage]
@@ -441,13 +463,13 @@ private fun ReaderBody(
 
                     IconButton(
                         onClick = { viewModel.toggleFavorite(currentImage) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = "Favorite",
                             tint = LocalContentColor.current,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
@@ -455,18 +477,19 @@ private fun ReaderBody(
                     Box {
                         IconButton(
                             onClick = { menuExpanded = true },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(44.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More",
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f)
                         ) {
                             if (!isPdfPage) {
                             DropdownMenuItem(
@@ -703,27 +726,64 @@ private fun SeekBar(
             shape = PillShape,
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
             contentColor = MaterialTheme.colorScheme.onSurface,
-            shadowElevation = 8.dp
+            shadowElevation = 6.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "${shownPage + 1}", style = MaterialTheme.typography.labelMedium)
-                Slider(
-                    value = value,
-                    onValueChange = {
-                        dragging = true
-                        dragValue = it
-                        onSeek(it.roundToInt())
-                    },
-                    onValueChangeFinished = { dragging = false },
-                    valueRange = 0f..(total - 1).toFloat(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-                Text(text = "$total", style = MaterialTheme.typography.labelMedium)
+                Text(text = "${shownPage + 1}", style = MaterialTheme.typography.labelSmall)
+
+                val active = MaterialTheme.colorScheme.onSurface
+                val inactive = active.copy(alpha = 0.3f)
+
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+                    Slider(
+                        value = value,
+                        onValueChange = {
+                            dragging = true
+                            dragValue = it
+                            onSeek(it.roundToInt())
+                        },
+                        onValueChangeFinished = { dragging = false },
+                        valueRange = 0f..(total - 1).toFloat(),
+                        thumb = {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(22.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(active)
+                            )
+                        },
+                        track = { sliderState ->
+                            val range = sliderState.valueRange
+                            val span = range.endInclusive - range.start
+                            val fraction = if (span > 0f) {
+                                ((sliderState.value - range.start) / span).coerceIn(0f, 1f)
+                            } else 0f
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(inactive)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .fillMaxHeight()
+                                        .background(active)
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
+                    )
+                }
+
+                Text(text = "$total", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -808,13 +868,29 @@ private fun VerticalPages(
                     flingJobs.clear()
                     val tracker = VelocityTracker()
                     var handled = false
+                    var pastSlop = false
+                    var slopPan = Offset.Zero
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (pressedCount > 1 || scale > 1f) {
-                            handled = true
                             val zoom = event.calculateZoom()
-                            val pan = event.calculatePan()
+                            var pan = event.calculatePan()
+                            if (!pastSlop) {
+                                if (pressedCount > 1) {
+                                    pastSlop = true
+                                } else {
+                                    slopPan += pan
+                                    if (slopPan.getDistance() > viewConfiguration.touchSlop) {
+                                        pastSlop = true
+                                        pan = slopPan
+                                    } else {
+                                        pan = Offset.Zero
+                                    }
+                                }
+                            }
+                            if (!pastSlop) continue
+                            handled = true
                             val centroid = event.calculateCentroid(useCurrent = true)
                             val oldScale = scale
                             val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)
@@ -984,14 +1060,30 @@ private fun HorizontalPages(
                     flingJobs.clear()
                     val tracker = VelocityTracker()
                     var handled = false
+                    var pastSlop = false
+                    var slopPan = Offset.Zero
                     var turned = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (pressedCount > 1 || scale > 1f) {
-                            handled = true
                             val zoom = event.calculateZoom()
-                            val pan = event.calculatePan()
+                            var pan = event.calculatePan()
+                            if (!pastSlop) {
+                                if (pressedCount > 1) {
+                                    pastSlop = true
+                                } else {
+                                    slopPan += pan
+                                    if (slopPan.getDistance() > viewConfiguration.touchSlop) {
+                                        pastSlop = true
+                                        pan = slopPan
+                                    } else {
+                                        pan = Offset.Zero
+                                    }
+                                }
+                            }
+                            if (!pastSlop) continue
+                            handled = true
                             val centroid = event.calculateCentroid(useCurrent = true)
                             val oldScale = scale
                             val newScale = (oldScale * zoom).coerceIn(1f, MAX_ZOOM)

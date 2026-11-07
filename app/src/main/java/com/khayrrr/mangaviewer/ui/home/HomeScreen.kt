@@ -1,5 +1,13 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material.icons.filled.SelectAll
 import com.khayrrr.mangaviewer.util.PdfShare
 import com.khayrrr.mangaviewer.util.isPdf
@@ -143,6 +151,7 @@ fun HomeScreen(
     }
 
     // Top menu states
+    var folderMenuExpanded by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var contextMenuExpanded by remember { mutableStateOf(false) }
     var showViewStyleDialog by remember { mutableStateOf(false) }
@@ -177,6 +186,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.systemBarsIgnoringVisibility,
         topBar = {
             when {
                 // Contextual Action Bar Overlay in Selection Mode
@@ -188,7 +198,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .statusBarsPadding()
+                                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -336,7 +346,7 @@ fun HomeScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .statusBarsPadding()
+                                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
@@ -438,6 +448,41 @@ fun HomeScreen(
                             )
                         },
                         actions = {
+                            Box {
+                                FilledTonalIconButton(
+                                    onClick = { folderMenuExpanded = true },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CreateNewFolder,
+                                        contentDescription = "Add or manage folders",
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = folderMenuExpanded,
+                                    onDismissRequest = { folderMenuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Add folder") },
+                                        leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
+                                        onClick = {
+                                            folderMenuExpanded = false
+                                            folderPickerLauncher.launch(null)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Manage folders") },
+                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                        onClick = {
+                                            folderMenuExpanded = false
+                                            onNavigateToSettings()
+                                        }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                             IconButton(onClick = { viewModel.setSearchActive(true) }) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
@@ -524,6 +569,8 @@ fun HomeScreen(
                                 )
                             }
                         },
+                        windowInsets = WindowInsets.systemBarsIgnoringVisibility
+                            .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surface
                         )
