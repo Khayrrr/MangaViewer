@@ -1,5 +1,14 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.only
@@ -190,9 +199,31 @@ fun HomeScreen(
     Scaffold(
         contentWindowInsets = WindowInsets.systemBarsIgnoringVisibility,
         topBar = {
+            val barMode = when {
+                uiState.isSelectionMode -> 0
+                uiState.isSearchActive -> 1
+                else -> 2
+            }
+            AnimatedContent(
+                targetState = barMode,
+                transitionSpec = {
             when {
+                        targetState == 1 ->
+                            (fadeIn(tween(200)) +
+                                expandHorizontally(tween(280), expandFrom = Alignment.End)) togetherWith
+                                fadeOut(tween(100))
+                        initialState == 1 ->
+                            fadeIn(tween(150)) togetherWith
+                                (fadeOut(tween(200)) +
+                                    shrinkHorizontally(tween(260), shrinkTowards = Alignment.End))
+                        else -> EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
+                label = "topbar"
+            ) { mode ->
+            when (mode) {
                 // Contextual Action Bar Overlay in Selection Mode
-                uiState.isSelectionMode -> {
+                0 -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shadowElevation = 4.dp,
@@ -340,7 +371,7 @@ fun HomeScreen(
                 }
 
                 // Expanded Search Bar
-                uiState.isSearchActive -> {
+                1 -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 4.dp,
@@ -578,7 +609,7 @@ fun HomeScreen(
                         )
                     )
                 }
-            }
+            }}
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->

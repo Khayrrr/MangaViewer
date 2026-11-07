@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.reader
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -327,6 +328,12 @@ private fun ReaderBody(
         }
     }
 
+    val overlayProgress by animateFloatAsState(
+        targetValue = if (uiVisible) 1f else 0f,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "overlay"
+    )
+
     // Seekbar (vertical mode): jump to the dragged page
     var seekTarget by remember { mutableIntStateOf(-1) }
     LaunchedEffect(seekTarget) {
@@ -420,7 +427,7 @@ private fun ReaderBody(
             }
         }
 
-        if (uiVisible) {
+        if (overlayProgress > 0f) {
             // Back button (top left): same size and adaptive colours as the toolbar
             Surface(
                 onClick = onNavigateBack,
@@ -430,6 +437,10 @@ private fun ReaderBody(
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    .graphicsLayer {
+                        translationY = -(1f - overlayProgress) * size.height
+                        alpha = overlayProgress
+                    }
                     .statusBarsPadding()
                     .padding(16.dp)
                     .size(48.dp)
@@ -451,6 +462,10 @@ private fun ReaderBody(
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .graphicsLayer {
+                        translationY = -(1f - overlayProgress) * size.height
+                        alpha = overlayProgress
+                    }
                     .statusBarsPadding()
                     .padding(16.dp)
             ) {
@@ -587,6 +602,10 @@ private fun ReaderBody(
                     onSeek = { seekTarget = it },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .graphicsLayer {
+                            translationY = (1f - overlayProgress) * size.height
+                            alpha = overlayProgress
+                        }
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 16.dp)
                 )
