@@ -200,7 +200,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .padding(top = statusBarTop)()
+                                .padding(top = statusBarTop)
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -348,7 +348,7 @@ fun HomeScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .padding(top = statusBarTop)()
+                                .padding(top = statusBarTop)
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
