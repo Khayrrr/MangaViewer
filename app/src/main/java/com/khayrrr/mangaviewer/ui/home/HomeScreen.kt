@@ -1,5 +1,6 @@
 package com.khayrrr.mangaviewer.ui.home
 
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -139,6 +140,7 @@ fun HomeScreen(
     onOpenReader: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val statusBarTop = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val allTags by viewModel.allTags.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -198,7 +200,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.Top))()
+                                .padding(top = statusBarTop)()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -346,7 +348,7 @@ fun HomeScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.Top))()
+                                .padding(top = statusBarTop)()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
