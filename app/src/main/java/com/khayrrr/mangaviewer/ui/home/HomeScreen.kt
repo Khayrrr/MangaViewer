@@ -198,7 +198,7 @@ fun HomeScreen(
                     ) {
                         Row(
                             modifier = Modifier
-                                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)()
+                                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.Top))()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -346,7 +346,7 @@ fun HomeScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)()
+                                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.Top))()
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
